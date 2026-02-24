@@ -1,0 +1,182 @@
+"""Core data structures and helpers for the bibliography script.
+
+This module contains the :class:`BibFile` abstraction around a path and a
+parsed BibTeX database, utilities for walking and transforming the fields of
+entries, and a few constants used across the project.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Callable, Iterator
+
+import bibtexparser  # type: ignore[import]
+from bibtexparser.bparser import BibTexParser  # type: ignore[import]
+from bibtexparser.bwriter import BibTexWriter  # type: ignore[import]
+from bibtexparser.customization import convert_to_unicode  # type: ignore[import]
+
+# constant lists that were previously defined in the monolithic script
+FIELDS_TO_REMOVE = [
+    "file",
+    "urldate",
+    "langid",
+    "keywords",
+    "abstract",
+    "Bdsk-Url-1",
+    "Bdsk-Url-2",
+    "note",
+    "annote",
+    "comment",
+    "timestamp",
+    "date-added",
+    "date-modified",
+]
+
+# fields that we might want to complain about or normalise later
+FIELDS_TO_CHECK: list[str] = []
+FIELDS_TO_NORMALISE: list[str] = []
+
+
+@dataclass
+class EntryMeta:
+    """Metadata for a single BibTeX entry.
+
+    ``key`` is the citation key, ``file`` is the :class:`pathlib.Path` of the
+    originating .bib file, and ``entry`` is the raw dictionary produced by
+    ``bibtexparser``.
+    """
+
+    key: str
+    file: Path
+    entry: dict[str, Any]
+
+
+class BibFile:
+    """Lightweight wrapper around a BibTeX file and its parsed database.
+
+    Instances behave like a container of entries and provide convenience
+    methods for reading from and writing back to disk.
+    """
+
+    def __init__(self, path: Path | str):
+        self.path = Path(path)
+        self.database = None  # type: bibtexparser.bibdatabase.BibDatabase | None
+        self.read()
+
+    def read(self) -> None:
+        parser = BibTexParser()
+        parser.customization = convert_to_unicode
+        parser.ignore_nonstandard_types = False
+        parser.homogenise_fields = False
+
+        try:
+            with self.path.open("r", encoding="utf-8") as f:
+                self.database = bibtexparser.load(f, parser=parser)
+        except Exception as exc:
+            raise RuntimeError(f"Error parsing {self.path}: {exc}")
+
+    def write(self) -> None:
+        if self.database is None:
+            raise RuntimeError("database not loaded")
+        writer = BibTexWriter()
+        writer.indent = "  "
+        writer.display_order = (
+            "title",
+            "author",
+            "journal",
+            "year",
+            "volume",
+            "number",
+            "pages",
+            "doi",
+            "url",
+            "publisher",
+        )
+        try:
+            with self.path.open("w", encoding="utf-8") as f:
+                bibtexparser.dump(self.database, f, writer=writer)
+        except Exception as exc:
+            raise RuntimeError(f"Error writing {self.path}: {exc}")
+
+    @property
+    def entries(self) -> list[dict[str, Any]]:
+        return self.database.entries if self.database else []
+
+
+# helpers for field-level iteration and transformation
+
+
+def walk_fields(bibfile: BibFile) -> Iterator[tuple[dict[str, Any], str, Any]]:
+    """Yield ``(entry, field, value)`` for every field in every entry.
+
+    The iteration uses ``list(entry.items())`` to allow callers to modify the
+    ``entry`` while iterating.
+    """
+    for entry in bibfile.entries:
+        for field, value in list(entry.items()):
+            yield entry, field, value
+
+
+FieldTransform = Callable[[Any], Any]
+
+
+def field_transform(func: FieldTransform) -> Callable[[BibFile], int]:
+    """Decorator that applies ``func`` to every value in a :class:`BibFile`.
+
+    ``func`` should accept a single argument (the current field value) and
+    return a replacement value.  If the return value is ``None`` or is equal to
+    the original value, no modification is made.  The decorated function will
+    receive a :class:`BibFile` and return the number of fields that were
+    changed.
+    """
+
+    def wrapper(bibfile: BibFile) -> int:
+        changed = 0
+        for entry, field, value in walk_fields(bibfile):
+            try:
+                new_value = func(value)
+            except Exception:
+                new_value = value
+            if new_value is not None and new_value != value:
+                entry[field] = new_value
+                changed += 1
+        return changed
+
+    return wrapper
+
+
+# small helper used by tests and potentially elsewhere
+
+def _join_multiline_values(value: Any) -> Any:
+    """Concatenate multi-line or list-valued field contents into a single string.
+
+    ``bibtexparser`` sometimes returns a list for a field when the value spans
+    multiple lines; this helper ensures we always work with a simple string.
+    """
+    if isinstance(value, list):
+        return " ".join(str(v) for v in value)
+    if isinstance(value, str) and "\n" in value:
+        return " ".join(line.strip() for line in value.splitlines())
+    return value
+
+
+# convenience re‑exports, mirroring legacy behaviour
+
+def parse_bib_file(path: Path | str) -> list[dict[str, Any]]:
+    """Parse a file and return :data:`entries` (legacy compatibility)."""
+    bf = BibFile(path)
+    return bf.entries
+
+
+def parse_bibtex_file(path: Path | str) -> bibtexparser.bibdatabase.BibDatabase:
+    """Parse a file and return the full :class:`BibDatabase` object."""
+    bf = BibFile(path)
+    return bf.database
+
+
+def write_bib_file(path: Path | str, bib_database: bibtexparser.bibdatabase.BibDatabase) -> None:
+    """Write a :class:`BibDatabase` back to disk.  Used by the legacy script."""
+    bf = BibFile(path)
+    bf.database = bib_database
+    bf.write()

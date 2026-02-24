@@ -1,0 +1,19 @@
+# Python artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# virtual environment
+venv/
+.env
+
+# LaTeX and bibliography files
+references.bib*
+main.tex
+
+# build outputs
+dist/
+build/
+
+# Editor files
+*.swp
