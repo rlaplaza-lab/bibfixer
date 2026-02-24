@@ -19,14 +19,15 @@ classifiers = [
 ]
 dependencies = [
     "bibtexparser>=1.3",
+    # bibfmt is a mandatory formatting helper; install via GitHub as it isn't
+    # on PyPI yet.
+    "bibfmt @ git+https://github.com/rlaplaza-lab/bibfmt.git",
 ]
 
 [project.optional-dependencies]
 # optional features that require third-party tools not on PyPI or only needed
 # for extended curation workflows
 betterbib = ["betterbib>=0.11"]
-# bibfmt isn't published on PyPI; install via a direct Git reference
-bibfmt = ["bibfmt @ git+https://github.com/rlaplaza-lab/bibfmt.git"]
 pybtex = ["pybtex>=0.24"]
 
 # development/test tools

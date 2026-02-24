@@ -17,18 +17,16 @@ mypy .
 pytest
 ```
 
-The core library only requires `bibtexparser`.  Additional features such as
-updating with `betterbib` or formatting with `bibfmt` are available as
-optional extras (`pip install .[betterbib]`, etc.).  The `bibfmt` tool isn't
-on PyPI; install it from the GitHub repository with:
+The core library requires both `bibtexparser` and the formatting tool
+`bibfmt` (installed from GitHub, since it isn’t yet on PyPI).  Curation
+routines use `bibfmt` by default to normalise and drop non-standard fields.
+Other helpers such as `betterbib` or `pybtex` remain optional extras.
+
+Install the package normally, which will pull in bibfmt:
 
 ```bash
-pip install "bibfixer[bibfmt]"
-# or explicitly
-pip install "bibfmt @ git+https://github.com/rlaplaza-lab/bibfmt.git"
+pip install .
 ```
-
-These extras are not needed for the unit tests.
 
 After installing the package you can call the CLI directly:
 
