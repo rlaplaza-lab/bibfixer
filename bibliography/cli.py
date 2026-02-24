@@ -138,7 +138,7 @@ def update_with_betterbib(bib_file):
     shutil.copy2(bib_file, backup_path)
     
     # Load entries before update to validate DOIs
-    bib_database_before = core.core.parse_bibtex_file(bib_file)
+    bib_database_before = core.parse_bibtex_file(bib_file)
     dois_before = {}
     if bib_database_before:
         for entry in bib_database_before.entries:
@@ -174,7 +174,7 @@ def update_with_betterbib(bib_file):
         return
     
     # Validate that betterbib didn't corrupt entries
-    bib_database_after = core.core.parse_bibtex_file(bib_file)
+    bib_database_after = core.parse_bibtex_file(bib_file)
     if bib_database_after and bib_database_before:
         # Check for suspicious changes: entries with same key but completely different content
         # This catches cases where betterbib fetched wrong metadata
@@ -553,7 +553,7 @@ def fix_problematic_unicode(bib_file):
 
 
 def fix_html_entities(bib_file):
-    """Fix HTML entities in BibTeX fields.
+    r"""Fix HTML entities in BibTeX fields.
     
     Converts HTML entities to LaTeX equivalents:
     - &amp; -> \&
@@ -2087,7 +2087,7 @@ def fix_malformed_author_fields(bib_file):
 
 
 def check_unescaped_percent():
-    """Check for unescaped % characters in BibTeX fields.
+    r"""Check for unescaped % characters in BibTeX fields.
     
     The % character is a comment character in LaTeX/BibTeX and must be escaped
     as \% to be treated as literal text. Unescaped % characters can cause
