@@ -25,7 +25,8 @@ dependencies = [
 # optional features that require third-party tools not on PyPI or only needed
 # for extended curation workflows
 betterbib = ["betterbib>=0.11"]
-bibfmt = []  # install from source if you need formatting support
+# bibfmt isn't published on PyPI; install via a direct Git reference
+bibfmt = ["bibfmt @ git+https://github.com/rlaplaza-lab/bibfmt.git"]
 pybtex = ["pybtex>=0.24"]
 
 # development/test tools
