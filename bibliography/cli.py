@@ -1291,13 +1291,19 @@ def curate_bibliography(bib_files, create_backups=True, preserve_keys=False):
                 all_key_mappings.update(key_mapping)
 
         # Step 2a: Standardize citation keys (generate canonical labels)
-        print("\n" + "=" * 70)
-        print("Step 2a: Standardizing citation keys")
-        print("=" * 70)
-        for bib_file in bib_files:
-            key_mapping = standardize_citation_keys(bib_file)
-            if key_mapping:
-                all_key_mappings.update(key_mapping)
+        # This step only runs if we have a main.tex file to update; otherwise
+        # keys would change without any corresponding citation updates.
+        tex_files = collect_all_tex_files()
+        if any(tf.name == 'main.tex' for tf in tex_files):
+            print("\n" + "=" * 70)
+            print("Step 2a: Standardizing citation keys")
+            print("=" * 70)
+            for bib_file in bib_files:
+                key_mapping = standardize_citation_keys(bib_file)
+                if key_mapping:
+                    all_key_mappings.update(key_mapping)
+        else:
+            print("\nSkipping citation key standardization (no main.tex found)")
 
         # Step 3: Update .tex files with sanitized/standardized keys
         if all_key_mappings:

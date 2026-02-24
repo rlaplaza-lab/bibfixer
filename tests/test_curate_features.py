@@ -67,6 +67,36 @@ def test_standardize_keys(tmp_path, monkeypatch):
     assert re.search(r"cite\{" + re.escape(newkey) + r"\}", tex.read_text())
 
 
+def test_standardize_skipped_without_main(tmp_path, monkeypatch):
+    monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: type("R", (), {"returncode": 0, "stderr": ""})())
+
+    # no main.tex created by setup
+    bib = tmp_path / "refs.bib"
+    bib.write_text("""@article{oldkey,
+  author={Smith, John},
+  year={2020},
+  title={Title},
+}
+""")
+    # create some other tex file to mimic a project
+    other = tmp_path / "chapter.tex"
+    other.write_text("Citation \cite{oldkey}")
+    import os
+    os.chdir(tmp_path)
+
+    import io
+    from contextlib import redirect_stdout
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        curate_bibliography([bib], create_backups=False)
+    output = buf.getvalue()
+    # confirm log indicates skip
+    assert "Skipping citation key standardization" in output
+    # since entry may be removed as unused, ensure no new standardized key appears
+    assert "Smith2020" not in bib.read_text()
+
+
 def test_betterbib_suspicious_change_restores(tmp_path, monkeypatch, capsys):
     # simulate betterbib updating file to wrong article (bad URL/title)
     original = """@article{X,
