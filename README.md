@@ -17,6 +17,11 @@ mypy .
 pytest
 ```
 
+The core library only requires `bibtexparser`.  Additional features such as
+updating with `betterbib` or formatting with `bibfmt` are available as
+optional extras (`pip install .[betterbib]`, etc.) and are not needed for
+the unit tests.
+
 After installing the package you can call the CLI directly:
 
 ```bash
