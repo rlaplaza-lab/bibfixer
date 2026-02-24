@@ -162,7 +162,14 @@ def update_tex_citations(tex_files: Iterable[Path],
                     updated_keys.append(key_mapping[norm])
                 else:
                     updated_keys.append(key)
-            return match.group(0).replace(keys_str, ', '.join(updated_keys))
+            # remove duplicates while preserving order
+            seen = set()
+            deduped = []
+            for k in updated_keys:
+                if k not in seen:
+                    seen.add(k)
+                    deduped.append(k)
+            return match.group(0).replace(keys_str, ', '.join(deduped))
 
         for pattern in patterns:
             content = re.sub(pattern, replace_citations, content)
@@ -199,5 +206,69 @@ def sanitize_citation_keys(bib_file: Path) -> Dict[str, str]:
             modified = True
 
     if modified:
+        write_bib_file(bib_file, bib_database)
+    return key_mapping
+
+
+def _generate_citation_key(entry: dict) -> str:
+    """Build a key in AuthorYearJournalFirstTitleWord format from a BibTeX entry."""
+    # last name of first author
+    auth = entry.get('author', '')
+    last = ''
+    if auth:
+        first_author = auth.split(' and ')[0].strip()
+        if ',' in first_author:
+            last = first_author.split(',')[0]
+        else:
+            last = first_author.split()[-1]
+        last = re.sub(r"[^A-Za-z]", "", last)
+    year = re.sub(r"[^0-9]", "", str(entry.get('year', '')))
+    journal = entry.get('journal', '')
+    jabr = ''
+    if journal:
+        jabr = ''.join(w[0] for w in journal.split() if w and w[0].isalpha())
+    title = entry.get('title', '')
+    firstword = ''
+    if title:
+        firstword = re.sub(r"[^A-Za-z0-9]", "", title.split()[0])
+    key = f"{last}{year}{jabr}{firstword}"
+    if key and not key[0].isalpha():
+        key = f"k{key}"
+    return key
+
+
+def standardize_citation_keys(bib_file: Path) -> Dict[str, str]:
+    """Assign canonical keys and rewrite the file.
+
+    New keys follow the pattern: AuthorYearJournalFirstTitleWord.
+    Collisions are avoided by appending a counter.
+    Returns mapping from old normalized key to new key.
+    """
+    bib_database = parse_bibtex_file(bib_file)
+    if not bib_database:
+        return {}
+
+    key_mapping: Dict[str, str] = {}
+    used_keys: Set[str] = set()
+
+    for entry in bib_database.entries:
+        orig = entry.get('ID', '')
+        norm = utils.normalize_unicode(orig)
+        if not norm:
+            continue
+        new_key = _generate_citation_key(entry)
+        if not new_key or new_key == norm:
+            used_keys.add(norm)
+            continue
+        base = new_key
+        i = 1
+        while new_key in used_keys:
+            new_key = f"{base}{i}"
+            i += 1
+        entry['ID'] = new_key
+        key_mapping[norm] = new_key
+        used_keys.add(new_key)
+
+    if key_mapping:
         write_bib_file(bib_file, bib_database)
     return key_mapping

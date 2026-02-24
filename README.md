@@ -6,6 +6,43 @@ helpers for parsing `.bib` files, normalising entry keys, and scanning
 `.tex` sources for citation commands.  After installation a console script
 called ``bibfixer`` is available for validating and curating bibliographies.
 
+## Usage 📦
+
+Once installed, the `bibfixer` command can be run from your project root to
+inspect and repair your bibliography and TeX source.  By default it will
+process ``references.bib`` and ``main.tex`` (but you may specify other paths
+via command-line options).  The utility performs the following operations
+*automatically*:
+
+1. Creates backups of the original files (`.backup` suffix) before making any
+   changes.
+2. Normalises entry keys and fields using journal abbreviations where
+   appropriate.
+3. Removes unused bibliography entries (those not cited in any `.tex` file).
+4. Detects and consolidates duplicate references, first by DOI and then by
+   title (loose matching ignores case, braces and punctuation).
+5. Applies formatting fixes (via ``bibfmt``) and removes non‑standard fields.
+6. Generates a detailed report on all changes made, written to standard
+   output.
+
+### Example
+
+```bash
+pip install .            # install the package and its dependencies
+
+# run on the default bibliography and tex files
+bibfixer
+
+# or specify files explicitly
+bibfixer --bib references.bib --tex main.tex
+```
+
+After running, ``references.bib`` and ``main.tex`` will be updated (with
+backups preserved) and you will see a summary report of the modifications.
+
+---
+
+
 ## Development
 
 Run the tests and linting tools with:

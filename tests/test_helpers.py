@@ -69,6 +69,18 @@ def test_extract_and_update_citations(tmp_path):
     assert "cite{A,B}" not in new
 
 
+def test_update_tex_deduplicates(tmp_path):
+    tex = tmp_path / "foo.tex"
+    tex.write_text(r"This cites \cite{X,Y,Z}.")
+    # map X and Y to same new key
+    mapping = {"X": "K", "Y": "K"}
+    helpers.update_tex_citations([tex], mapping)
+    content = tex.read_text()
+    # two original keys map to K; duplicates should be collapsed but Z should
+    # remain
+    assert content.strip().endswith("cite{K, Z}.")
+
+
 def test_sanitize_citation_keys(tmp_path):
     bib = tmp_path / "test.bib"
     bib.write_text("""@article{Bad!Key,

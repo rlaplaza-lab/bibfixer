@@ -81,6 +81,7 @@ collect_all_bib_files = helpers.collect_all_bib_files
 extract_citations_from_tex = helpers.extract_citations_from_tex
 update_tex_citations = helpers.update_tex_citations
 sanitize_citation_keys = helpers.sanitize_citation_keys
+standardize_citation_keys = helpers.standardize_citation_keys
 
 
 # Non-standard fields to remove
@@ -188,26 +189,45 @@ def update_with_betterbib(bib_file):
                 # Check if title changed dramatically (might be wrong paper)
                 title_before = str(entry_before.get('title', '')).lower()
                 title_after = str(entry_after.get('title', '')).lower()
-                
-                # If title changed completely and doesn't share significant words, it's suspicious
+
+                # URL comparison can also catch cases where metadata jumps to a completely
+                # unrelated page (bad DOI lookup etc.).
+                url_before = str(entry_before.get('url', '')).lower()
+                url_after = str(entry_after.get('url', '')).lower()
+
+                # determine whether change is dramatic
+                big_title_diff = False
                 if title_before and title_after and title_before != title_after:
                     # Check if they share at least 2 significant words (to allow for minor updates)
                     words_before = set(w for w in title_before.split() if len(w) > 3)
                     words_after = set(w for w in title_after.split() if len(w) > 3)
                     common_words = words_before & words_after
-                    
-                    # Also check if DOI changed when it existed before
-                    doi_before = utils.normalize_doi(entry_before.get('doi', '') or entry_before.get('DOI', ''))
-                    doi_after = utils.normalize_doi(entry_after.get('doi', '') or entry_after.get('DOI', ''))
-                    
-                    if len(common_words) < 2 and doi_before and doi_after and doi_before != doi_after:
-                        # Very suspicious - title changed completely and DOI changed
-                        suspicious_changes.append(key)
-                        print(f"  Warning: Suspicious change detected for {key}")
+                    if len(common_words) < 2:
+                        big_title_diff = True
+
+                doi_before = utils.normalize_doi(entry_before.get('doi', '') or entry_before.get('DOI', ''))
+                doi_after = utils.normalize_doi(entry_after.get('doi', '') or entry_after.get('DOI', ''))
+
+                big_doi_change = doi_before and doi_after and doi_before != doi_after
+
+                big_url_change = False
+                if url_after and url_before.lower() != url_after.lower():
+                    # new URL or changed URL detected; treat as suspicious if title also changed
+                    big_url_change = True
+
+                # flag if any of the suspicious criteria hold
+                if big_title_diff or big_doi_change or big_url_change:
+                    suspicious_changes.append(key)
+                    print(f"  Warning: Suspicious metadata change detected for {key}")
+                    if big_title_diff:
                         print(f"    Title before: {title_before[:60]}...")
                         print(f"    Title after: {title_after[:60]}...")
+                    if big_doi_change:
                         print(f"    DOI before: {doi_before}")
                         print(f"    DOI after: {doi_after}")
+                    if big_url_change:
+                        print(f"    URL before: {url_before}")
+                        print(f"    URL after: {url_after}")
         
         if suspicious_changes:
             print(f"  Restoring {len(suspicious_changes)} entry/entries from backup due to suspicious changes")
@@ -855,27 +875,66 @@ def fix_legacy_month_fields(bib_file):
 def format_with_bibfmt(bib_file):
     """Format BibTeX file using bibfmt and remove non-standard fields."""
     print("  Formatting with bibfmt and removing non-standard fields...")
-    
+
     # Build bibfmt command with field removal
     cmd = ['bibfmt', '-i', '--indent', '2', '--align', '14', '-d', 'braces']
-    
+
     # Add --drop for each field to remove
     for field in FIELDS_TO_REMOVE:
         cmd.extend(['--drop', field])
-    
+
     cmd.append(str(bib_file))
-    
+
     try:
+        # before/after comparison for suspicious metadata edits
+        before_text = None
+        try:
+            before_text = bib_file.read_text(encoding='utf-8')
+        except Exception:
+            before_text = None
+
         result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=60
-        )
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=60
+            )
         if result.returncode != 0:
             print(f"  Warning: bibfmt had issues: {result.stderr}")
         else:
             print("  bibfmt formatting completed")
+
+        # if the file content changed dramatically (unlikely) warn user
+        if before_text is not None:
+            try:
+                after_text = bib_file.read_text(encoding='utf-8')
+                if before_text != after_text:
+                    # parse both and compare entries for big differences
+                    parser = BibTexParser()
+                    db_before = bibtexparser.loads(before_text, parser=parser)
+                    db_after = bibtexparser.loads(after_text, parser=parser)
+                    for entry_after in db_after.entries:
+                        key = entry_after.get('ID', '')
+                        match = next((e for e in db_before.entries if e.get('ID','')==key), None)
+                        if match:
+                            title_before = str(match.get('title','')).lower()
+                            title_after = str(entry_after.get('title','')).lower()
+                            doi_before = utils.normalize_doi(match.get('doi','') or match.get('DOI',''))
+                            doi_after = utils.normalize_doi(entry_after.get('doi','') or entry_after.get('DOI',''))
+                            url_before = str(match.get('url','')).lower()
+                            url_after = str(entry_after.get('url','')).lower()
+                            # simple heuristic: warn if title changed and no common words
+                            if title_before and title_after and title_before != title_after:
+                                words_before = set(w for w in title_before.split() if len(w)>3)
+                                words_after = set(w for w in title_after.split() if len(w)>3)
+                                if len(words_before & words_after) < 2:
+                                    print(f"  Warning: bibfmt appears to have altered title for {key}")
+                            if doi_before and doi_after and doi_before != doi_after:
+                                print(f"  Warning: bibfmt changed DOI for {key} ({doi_before} → {doi_after})")
+                            if url_before.lower() != url_after.lower() and url_after:
+                                print(f"  Warning: bibfmt changed URL for {key} ({url_before} → {url_after})")
+            except Exception:
+                pass
     except Exception as e:
         print(f"  Warning: bibfmt failed: {e}")
 
@@ -1230,8 +1289,17 @@ def curate_bibliography(bib_files, create_backups=True, preserve_keys=False):
             key_mapping = sanitize_citation_keys(bib_file)
             if key_mapping:
                 all_key_mappings.update(key_mapping)
-        
-        # Step 3: Update .tex files with sanitized keys
+
+        # Step 2a: Standardize citation keys (generate canonical labels)
+        print("\n" + "=" * 70)
+        print("Step 2a: Standardizing citation keys")
+        print("=" * 70)
+        for bib_file in bib_files:
+            key_mapping = standardize_citation_keys(bib_file)
+            if key_mapping:
+                all_key_mappings.update(key_mapping)
+
+        # Step 3: Update .tex files with sanitized/standardized keys
         if all_key_mappings:
             print("\n" + "=" * 70)
             print("Step 3: Updating .tex files with sanitized keys")
@@ -1247,18 +1315,26 @@ def curate_bibliography(bib_files, create_backups=True, preserve_keys=False):
         print("\n" + "Skipping key sanitization and updates (--preserve-keys)")
         all_key_mappings = {}
     
-    # Step 4: Remove duplicate entries across files
+    # Step 4: Remove unused entries (not referenced in any .tex)
     print("\n" + "=" * 70)
-    print("Step 4: Removing duplicate entries across files")
+    print("Step 4: Removing unused entries")
+    print("=" * 70)
+    unused_removed = remove_unused_entries(bib_files)
+    if unused_removed == 0:
+        print("  No unused entries found.")
+    
+    # Step 5: Remove duplicate entries across files
+    print("\n" + "=" * 70)
+    print("Step 5: Removing duplicate entries across files")
     print("=" * 70)
     
     removed = remove_duplicate_entries_across_files(bib_files)
     if removed == 0:
         print("  No duplicate entries to remove.")
     
-    # Step 5: Find and synchronize remaining duplicates (same key, same file)
+    # Step 6: Find and synchronize remaining duplicates (same key, same file)
     print("\n" + "=" * 70)
-    print("Step 5: Synchronizing duplicate entries")
+    print("Step 6: Synchronizing duplicate entries")
     print("=" * 70)
     
     duplicates = find_duplicates(bib_files)
@@ -1295,7 +1371,22 @@ def curate_bibliography(bib_files, create_backups=True, preserve_keys=False):
     else:
         print("\nSkipping DOI consolidation (--preserve-keys)")
         doi_key_mapping = {}
-    
+
+    # Step 8: Consolidate duplicate titles (after DOI consolidation)
+    if not preserve_keys:
+        print("\n" + "=" * 70)
+        print("Step 8: Consolidating duplicate titles")
+        print("=" * 70)
+        title_key_mapping = consolidate_duplicate_titles(bib_files)
+        if title_key_mapping:
+            tex_files = collect_all_tex_files()
+            update_tex_citations(tex_files, title_key_mapping)
+        else:
+            print("  No duplicate titles to consolidate.")
+    else:
+        print("\nSkipping title consolidation (--preserve-keys)")
+        title_key_mapping = {}
+
     # Step 6: Final formatting pass and cleanup
     # CRITICAL ORDER: This order ensures LaTeX compilation will succeed
     # 1. bibfmt formats entries (may revert month/year fixes)
@@ -1519,48 +1610,48 @@ def validate_citations():
 
 def remove_duplicate_entries_across_files(bib_files):
     """Remove duplicate entries across bib files, keeping one copy.
-    
+
     For each duplicate key found across multiple files, keeps the entry
     in the first file (alphabetically) and removes it from other files.
     This prevents duplicate entry errors during LaTeX compilation.
     """
     print("\nRemoving duplicate entries across files...")
-    
+
     # Find all duplicate keys
     key_to_files = defaultdict(list)
     file_to_entries = {}
-    
+
     for bib_file in bib_files:
         bib_database = core.parse_bibtex_file(bib_file)
         if not bib_database:
             continue
-        
+
         file_to_entries[bib_file] = bib_database
-        
+
         for entry in bib_database.entries:
             key = entry.get('ID', '')
             if key:
                 key_to_files[key].append((bib_file, entry))
-    
+
     # Find duplicates
     duplicates = {key: files for key, files in key_to_files.items() if len(files) > 1}
-    
+
     if not duplicates:
         print("  No duplicate entries found across files")
         return 0
-    
+
     print(f"  Found {len(duplicates)} duplicate entry keys")
-    
+
     # For each duplicate, keep in first file (alphabetically), remove from others
     removed_count = 0
     files_to_update = set()
-    
+
     for key, file_entries in sorted(duplicates.items()):
         # Sort files alphabetically - keep in first file
         file_entries_sorted = sorted(file_entries, key=lambda x: x[0].name)
         keep_file, keep_entry = file_entries_sorted[0]
         remove_files = [f for f, e in file_entries_sorted[1:]]
-        
+
         # Remove from other files
         for remove_file in remove_files:
             bib_database = file_to_entries[remove_file]
@@ -1568,58 +1659,193 @@ def remove_duplicate_entries_across_files(bib_files):
             for i, entry in enumerate(bib_database.entries):
                 if entry.get('ID', '') == key:
                     entries_to_remove.append(i)
-            
+
             # Remove in reverse order to maintain indices
             for i in sorted(entries_to_remove, reverse=True):
                 del bib_database.entries[i]
                 removed_count += 1
                 files_to_update.add(remove_file)
-        
+
         print(f"    {key}: kept in {keep_file.name}, removed from {len(remove_files)} file(s)")
-    
+
     # Write updated files
     for bib_file in files_to_update:
         core.write_bib_file(bib_file, file_to_entries[bib_file])
-    
+
     if removed_count > 0:
         print(f"\n  Removed {removed_count} duplicate entry/entries")
         return removed_count
-    
+
     return 0
+
+
+def remove_unused_entries(bib_files):
+    """Purge entries that are not cited in any .tex source.
+
+    Crossref targets are treated as used so that automatically generated
+    parent entries are not removed.
+    """
+    print("\nRemoving unused entries...")
+
+    # gather citations from tex files
+    tex_files = collect_all_tex_files()
+    cited = set()
+    for tex in tex_files:
+        cited.update(extract_citations_from_tex(tex))
+
+    # collect crossref targets so they are preserved
+    crossrefs = set()
+    for bib_file in bib_files:
+        bib_db = core.parse_bibtex_file(bib_file)
+        if not bib_db:
+            continue
+        for entry in bib_db.entries:
+            cr = entry.get('crossref') or entry.get('Crossref')
+            if cr:
+                crossrefs.add(utils.normalize_unicode(cr))
+    cited |= crossrefs
+
+    removed_count = 0
+    for bib_file in bib_files:
+        bib_db = core.parse_bibtex_file(bib_file)
+        if not bib_db:
+            continue
+        to_remove = []
+        for i, entry in enumerate(bib_db.entries):
+            key = utils.normalize_unicode(entry.get('ID', ''))
+            if key and key not in cited:
+                to_remove.append(i)
+        for i in sorted(to_remove, reverse=True):
+            del bib_db.entries[i]
+            removed_count += 1
+        if to_remove:
+            core.write_bib_file(bib_file, bib_db)
+            print(f"  {bib_file.name}: removed {len(to_remove)} unused entries")
+
+    print(f"  Total unused entries removed: {removed_count}")
+    return removed_count
+
+
+def consolidate_duplicate_titles(bib_files):
+    """Detect and consolidate entries that share the same title.
+
+    Titles are compared using :func:`_normalize_title` so that differences in
+    case, punctuation or braces do not prevent matching.  When duplicates are
+    found the "best" entry is chosen (using :func:`choose_best_entry`) and all
+    other keys are mapped to it; the inferior entries are removed.  A mapping
+    of old keys to the chosen key is returned for updating citations in
+    .tex sources.
+    """
+    print("\nConsolidating duplicate titles across bib files...")
+
+    title_to_entries = defaultdict(list)
+    for bib_file in bib_files:
+        bib_db = core.parse_bibtex_file(bib_file)
+        if not bib_db:
+            continue
+        for entry in bib_db.entries:
+            title = entry.get('title', '')
+            if title:
+                norm = _normalize_title(title)
+                if norm:
+                    title_to_entries[norm].append((bib_file, entry))
+
+    duplicates = {t: e for t, e in title_to_entries.items() if len(e) > 1}
+    key_mapping = {}
+
+    if not duplicates:
+        print("  No duplicate titles to consolidate.")
+        return {}
+
+    # process groups one at a time
+    file_databases = {bib_file: core.parse_bibtex_file(bib_file)
+                      for bib_file in bib_files}
+
+    for norm, entries in duplicates.items():
+        # pick best entry among duplicates
+        best_entry = choose_best_entry(entries)
+        best_key = best_entry['ID']
+        print(f"  Title match '{norm}' -> keeping key '{best_key}'")
+
+        # update mapping for all other keys
+        for bib_file, entry in entries:
+            old_key = utils.normalize_unicode(entry.get('ID', ''))
+            if old_key != best_key:
+                key_mapping[old_key] = best_key
+
+        # ensure best entry appears once across files and replace others
+        files_with_best = set()
+        for bib_file, entry in entries:
+            db = file_databases.get(bib_file)
+            if not db:
+                continue
+            entry_key = utils.normalize_unicode(entry.get('ID', ''))
+            if entry_key == best_key and bib_file not in files_with_best:
+                files_with_best.add(bib_file)
+                # replace content with best entry
+                for i,e in enumerate(db.entries):
+                    if utils.normalize_unicode(e.get('ID','')) == best_key:
+                        db.entries[i] = best_entry.copy()
+                        db.entries[i]['ID'] = best_key
+                        break
+            elif entry_key != best_key:
+                # remove this entry
+                for i,e in enumerate(db.entries):
+                    if utils.normalize_unicode(e.get('ID','')) == entry_key:
+                        del db.entries[i]
+                        break
+
+    # write databases back
+    for bib_file, db in file_databases.items():
+        if db:
+            core.write_bib_file(bib_file, db)
+
+    print(f"  Consolidated {len(duplicates)} title groups, {len(key_mapping)} key mappings")
+    return key_mapping
+
+
+
+# ---------------------------------------------------------------------------
+# Utility helpers for duplicate detection/consolidation
+# ---------------------------------------------------------------------------
+
+def _normalize_title(title: str) -> str:
+    """Return a canonical form of a title for loose matching.
+
+    Removes braces, collapses whitespace, normalises dashes to spaces and
+    lowercases the string.  This mirrors the logic previously embedded in
+    :func:`check_duplicate_titles` and is reused by the new consolidation
+    functions.
+    """
+    if not title:
+        return ''
+    title = re.sub(r'[{}]', '', str(title))
+    title = re.sub(r'\s+', ' ', title)
+    title = re.sub(r'[-–—]+', ' ', title)
+    return title.strip().lower()
 
 
 def check_duplicate_titles():
     """Check for entries with duplicate titles across files.
-    
+
     Returns the number of duplicate titles found. Entries with the same title
     but different keys might be duplicates that need manual review.
     """
     bib_files = collect_all_bib_files()
-    
+
     print("\n" + "=" * 80)
     print("5. DUPLICATE TITLE CHECK")
     print("=" * 80)
     print()
-    
-    # Normalize titles for comparison
-    def normalize_title(title):
-        if not title:
-            return ''
-        # Remove braces, extra spaces, convert to lowercase
-        title = re.sub(r'[{}]', '', str(title))
-        title = re.sub(r'\s+', ' ', title)
-        # Normalize different dash types (en-dash, em-dash, double dash) to single space
-        title = re.sub(r'[-–—]+', ' ', title)
-        return title.strip().lower()
-    
+
     title_to_entries = defaultdict(list)
-    
+
     for bib_file in bib_files:
         entries = core.parse_bib_file(bib_file)
         for entry in entries:
             title = entry.get('title', '')
             if title:
-                normalized = normalize_title(title)
+                normalized = _normalize_title(title)
                 if normalized:
                     title_to_entries[normalized].append({
                         'key': entry.get('ID', ''),
@@ -1629,9 +1855,9 @@ def check_duplicate_titles():
                         'doi': entry.get('doi', 'N/A') or entry.get('DOI', 'N/A'),
                         'year': entry.get('year', 'N/A')
                     })
-    
+
     duplicates = {title: entries for title, entries in title_to_entries.items() if len(entries) > 1}
-    
+
     if duplicates:
         print(f"⚠ Found {len(duplicates)} duplicate titles:")
         print()
@@ -1642,14 +1868,14 @@ def check_duplicate_titles():
                 title_display = title_display[:77] + '...'
             print(f"  Title: {title_display}")
             print(f"    Appears {len(entries)} times:")
-            
+
             # Check if they have the same DOI (likely duplicates)
             dois = [e['doi'] for e in entries if e['doi'] != 'N/A']
             if len(set(dois)) == 1 and dois[0] != 'N/A':
                 print(f"    → Same DOI ({dois[0]}) - likely duplicates, consider consolidating")
             elif len(set(dois)) > 1:
                 print("    → Different DOIs - may be different papers, manual review needed")
-            
+
             for entry in entries:
                 print(f"      - {entry['file']}: {entry['key']}")
                 author_display = str(entry['author'])[:50]
@@ -1660,7 +1886,7 @@ def check_duplicate_titles():
                     print(f"        DOI: {entry['doi']}")
                 print(f"        Year: {entry['year']}")
             print()
-        
+
         print(f"  → Manual review recommended for {len(duplicates)} duplicate title(s)")
         return len(duplicates)
     else:
@@ -2265,7 +2491,11 @@ def generate_report(bib_files, before_stats=None):
             total_with_doi += stats['entries_with_doi']
             print(f"\n{bib_file.name}:")
             print(f"  Total entries: {stats['entry_count']}")
-            print(f"  Entries with DOI: {stats['entries_with_doi']} ({100*stats['entries_with_doi']/stats['entry_count']:.1f}%)")
+            if stats['entry_count']:
+                pct = 100 * stats['entries_with_doi'] / stats['entry_count']
+                print(f"  Entries with DOI: {stats['entries_with_doi']} ({pct:.1f}%)")
+            else:
+                print(f"  Entries with DOI: {stats['entries_with_doi']} (N/A - no entries)")
             print(f"  Entries with title: {stats['entries_with_title']}")
             print(f"  Entries with author: {stats['entries_with_author']}")
             print(f"  Entries with year: {stats['entries_with_year']}")
