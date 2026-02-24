@@ -17,3 +17,7 @@ build/
 
 # Editor files
 *.swp
+.vscode/
+
+# caches
+betterbib_cache.sqlite
