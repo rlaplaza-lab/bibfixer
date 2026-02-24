@@ -17,7 +17,12 @@ classifiers = [
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-dependencies = []
+dependencies = [
+    "bibtexparser>=1.3",
+    "betterbib>=0.11",
+    "bibfmt>=0.4",
+    "pybtex>=0.24",
+]
 
 [project.scripts]
 bibfixer = "bibliography.cli:main"
