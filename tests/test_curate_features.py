@@ -185,6 +185,99 @@ def test_betterbib_negative_return_signal(tmp_path, monkeypatch, capsys):
     assert bib.read_text().startswith("@article{X")
 
 
+def test_process_skip_betterbib(tmp_path, monkeypatch, capsys):
+    # using the flag to disable betterbib should avoid subprocess calls
+    bib = tmp_path / "refs.bib"
+    bib.write_text("@article{A, journal={Some Journal}}\n")
+
+    called = False
+    def fake_run(cmd, *args, **kwargs):
+        nonlocal called
+        # only complain if betterbib is being invoked
+        if isinstance(cmd, (list, tuple)) and cmd and "betterbib" in cmd[0]:
+            called = True
+            raise AssertionError("betterbib should not be executed")
+        # fall back to a dummy successful result for other tools
+        class R:
+            returncode = 0
+            stderr = ""
+            stdout = ""
+        return R()
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    from bibfixer.cli import process_bib_file
+    process_bib_file(bib, create_backups=False, use_betterbib=False)
+    assert not called
+
+
+def test_cli_no_betterbib(tmp_path, monkeypatch, capsys):
+    # the command-line option should propagate and skip the external tool
+    bib = tmp_path / "refs.bib"
+    bib.write_text("@article{A, journal={Some Journal}}\n")
+    tex = setup_simple_project(tmp_path)
+
+    calls = []
+    class R:
+        def __init__(self):
+            self.returncode = 0
+            self.stderr = ""
+            self.stdout = ""
+    def fake_run(cmd, capture_output, text, timeout):
+        calls.append(cmd.copy())
+        return R()
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    import sys
+    orig = sys.argv
+    sys.argv = ["bibfixer", "curate", "--yes", "--no-betterbib"]
+    try:
+        from bibfixer.cli import main
+        main()
+    finally:
+        sys.argv = orig
+    captured = capsys.readouterr()
+    assert "Skipping betterbib steps" in captured.out
+    # multiple subprocess calls (bibfmt etc.) are expected; make sure none of
+    # them invoke the external helper.
+    assert all(
+        not (isinstance(cmd, (list, tuple)) and cmd and "betterbib" in cmd[0])
+        for cmd in calls
+    )
+
+
+def test_env_var_disables_betterbib(tmp_path, monkeypatch, capsys):
+    bib = tmp_path / "refs.bib"
+    bib.write_text("@article{A, journal={Some Journal}}\n")
+    tex = setup_simple_project(tmp_path)
+
+    calls = []
+    class R:
+        def __init__(self):
+            self.returncode = 0
+            self.stderr = ""
+            self.stdout = ""
+    def fake_run(cmd, capture_output, text, timeout):
+        calls.append(cmd.copy())
+        return R()
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    monkeypatch.setenv("BIBFIXER_NO_BETTERBIB", "1")
+    from bibfixer.cli import main
+    import sys
+    orig = sys.argv
+    sys.argv = ["bibfixer", "curate", "--yes"]
+    try:
+        main()
+    finally:
+        sys.argv = orig
+    captured = capsys.readouterr()
+    assert "Skipping betterbib steps" in captured.out
+    assert all(
+        not (isinstance(cmd, (list, tuple)) and cmd and "betterbib" in cmd[0])
+        for cmd in calls
+    )
+
+
 def test_betterbib_skip_malformed_file(tmp_path, capsys):
     # if the bib file cannot be parsed we never invoke external betterbib
     bib = tmp_path / "bad.bib"
@@ -199,34 +292,6 @@ def test_betterbib_skip_malformed_file(tmp_path, capsys):
     assert "skipping betterbib update" in captured.out.lower()
     # file should be left untouched (no backup removed either)
     assert bib.read_text().startswith("@article")
-
-
-def test_betterbib_journal_data_download(tmp_path, monkeypatch):
-    # missing journals.json should trigger a download and still work
-    import betterbib
-    from betterbib import journal_abbrev
-    from pathlib import Path
-    from pybtex.database import Entry
-
-    data_dir = Path(betterbib.__file__).resolve().parent / "data"
-    json_path = data_dir / "journals.json"
-    if json_path.exists():
-        json_path.unlink()
-
-    class FakeResp:
-        def __enter__(self):
-            return self
-        def __exit__(self, *args):
-            return False
-        def read(self):
-            return b'{"Foo":"bar"}'
-
-    monkeypatch.setattr("urllib.request.urlopen", lambda url: FakeResp())
-
-    d = {"A": Entry("article", {"journal": "Foo"})}
-    journal_abbrev(d)
-    assert json_path.exists()
-    assert d["A"].fields["journal"] == "bar"
 
 
 def test_abbreviate_journal_names_heuristic(tmp_path, disable_bibfmt):

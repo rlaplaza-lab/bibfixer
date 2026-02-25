@@ -86,7 +86,15 @@ pip install -e betterbib-src  # or using poetry/poetry in-project path
 The copy under ``betterbib-src`` in the workspace already contains a few
 safeguards (faulthandler enabled, extra error handling) that help when
 `betterbib` misbehaves; updating that directory will pull in upstream fixes as
-well.  When `betterbib` is installed we call it twice during curation:
+well.  **Note**: the upstream repository stores its large ``journals.json``
+file in Git LFS.  `pip install` from GitHub does *not* fetch LFS objects, so
+an install may end up with a tiny pointer file instead of the real data.  In
+those situations the abbreviation subcommand will be skipped with a warning and
+a heuristic is used by bibfixer as a fallback.  The command-line flag
+`--no-betterbib` (or environment variable ``BIBFIXER_NO_BETTERBIB``) can be
+used to disable both the update and abbreviation steps entirely.
+
+When `betterbib` is installed we call it twice during curation:
 
 * `betterbib update` to pull updated metadata (DOIs, titles, etc.)
 * `betterbib abbreviate-journal-names -i` to apply the tool's internal

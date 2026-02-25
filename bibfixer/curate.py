@@ -14,6 +14,8 @@ from __future__ import annotations
 import subprocess
 import shutil
 import re
+import sys
+import os
 from collections import defaultdict
 from pathlib import Path
 from typing import Iterable, Any
@@ -86,9 +88,20 @@ def update_with_betterbib(bib_file: Path) -> None:
                 if doi:
                     dois_before[key] = utils.normalize_doi(doi)
 
+    # prefer running the package via ``python -m betterbib`` so that the
+    # interpreter’s import path is used rather than whatever script might be
+    # found on ``PATH``.  This reduces the chance that a stray executable from
+    # a source checkout is invoked when the working directory changes.
+    try:
+        import betterbib  # type: ignore[import]
+    except ImportError:
+        print("  Warning: betterbib not installed, skipping update")
+        return
+
+    cmd = [sys.executable, '-m', 'betterbib', 'update', '-i', str(bib_file)]
     try:
         result = subprocess.run(
-            ['betterbib', 'update', '-i', str(bib_file)],
+            cmd,
             capture_output=True,
             text=True,
             timeout=300,
@@ -156,8 +169,15 @@ def abbreviate_with_betterbib(bib_file: Path) -> None:
     """
     print("  Abbreviating journal names with betterbib...")
     try:
+        import betterbib  # type: ignore[import]
+    except ImportError:
+        print("  Warning: betterbib not installed, skipping abbreviation")
+        return
+
+    cmd = [sys.executable, '-m', 'betterbib', 'abbreviate-journal-names', '-i', str(bib_file)]
+    try:
         result = subprocess.run(
-            ['betterbib', 'abbreviate-journal-names', '-i', str(bib_file)],
+            cmd,
             capture_output=True,
             text=True,
             timeout=60,
@@ -414,16 +434,26 @@ def _apply_basic_fixes(bib_file: Path) -> None:
     fix_legacy_month_fields(bib_file)
 
 
-def process_bib_file(bib_file: Path, create_backups: bool = True) -> None:
-    """Apply the standard series of fixes and formatting operations to one file."""
+def process_bib_file(
+    bib_file: Path,
+    create_backups: bool = True,
+    use_betterbib: bool = True,
+) -> None:
+    """Apply the standard series of fixes and formatting operations to one file.
+
+    The *use_betterbib* flag allows callers to disable both the metadata update
+    and the journal abbreviation steps.  This is useful when the optional
+    helper is unavailable or known to be broken (for example on minimal
+    installations or when the binary resides in the source tree).
+    """
     print(f"\nProcessing {bib_file.name}...")
     if create_backups:
         create_backup(bib_file)
-    update_with_betterbib(bib_file)
-    # run the journal-abbreviation subcommand regardless of the update
-    # outcome so that we aren't reliant on the optional mapping or on
-    # betterbib surviving the initial metadata sync.
-    abbreviate_with_betterbib(bib_file)
+    if use_betterbib:
+        update_with_betterbib(bib_file)
+        abbreviate_with_betterbib(bib_file)
+    else:
+        print("  Skipping betterbib steps")
     print("  Fixing invalid UTF-8 byte sequences...")
     _apply_basic_fixes(bib_file)
     format_with_bibfmt(bib_file)
@@ -554,7 +584,16 @@ def remove_unused_entries(bib_files: Iterable[Path]) -> int:
     return removed
 
 
-def curate_bibliography(bib_files: Iterable[Path], create_backups: bool = True, preserve_keys: bool = False) -> None:
+def curate_bibliography(
+    bib_files: Iterable[Path],
+    create_backups: bool = True,
+    preserve_keys: bool = False,
+    use_betterbib: bool = True,
+) -> None:
+    # honour environment variable override for convenience in CI or
+    # minimal installs
+    if os.environ.get("BIBFIXER_NO_BETTERBIB"):
+        use_betterbib = False
     """Run the full curation workflow on a list of files.
 
     See :mod:`bibfixer.cli` for the original documentation and steps.
@@ -569,7 +608,11 @@ def curate_bibliography(bib_files: Iterable[Path], create_backups: bool = True, 
 
     # process each file individually
     for bib in bib_files:
-        process_bib_file(bib, create_backups=create_backups)
+        process_bib_file(
+            bib,
+            create_backups=create_backups,
+            use_betterbib=use_betterbib,
+        )
 
     # key sanitization and updates are handled by helpers directly
     if not preserve_keys:
