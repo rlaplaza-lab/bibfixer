@@ -98,7 +98,10 @@ def update_with_betterbib(bib_file: Path) -> None:
     # has a broken install, but there is no longer a meaningful "optional"
     # path.
     try:
-        import betterbib  # type: ignore[import]
+        # import is used only to confirm availability; keep the statement for
+        # clarity and raise an ImportError if the package is broken.  the
+        # unused-import warning is noisy so silence it explicitly.
+        import betterbib  # type: ignore[import]  # noqa: F401
     except ImportError:  # pragma: no cover - this should not happen in CI
         print("  Warning: betterbib not installed, skipping update")
         return
@@ -182,7 +185,9 @@ def abbreviate_with_betterbib(bib_file: Path) -> None:
     # unexpected because the package is required, but we retain a friendly
     # warning rather than letting an ImportError bubble up.
     try:
-        import betterbib  # type: ignore[import]
+        # see comment in :func:`update_with_betterbib` regarding the unused-
+        # import warning.
+        import betterbib  # type: ignore[import]  # noqa: F401
     except ImportError:  # pragma: no cover
         print("  Warning: betterbib not installed, skipping abbreviation")
         return

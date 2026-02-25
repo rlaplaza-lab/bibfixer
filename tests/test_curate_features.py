@@ -199,7 +199,7 @@ def test_process_skip_betterbib(tmp_path, monkeypatch, capsys):
     # abbreviating; ensure the routine is stubbed out so this test doesn't
     # trigger a wordnet lookup.
     try:
-        import iso4
+        import iso4  # type: ignore[import]
     except ImportError:  # shouldn't happen in a correctly configured env
         pass
     else:

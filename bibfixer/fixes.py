@@ -349,7 +349,10 @@ def _heuristic_abbrev(journal: str) -> str:
         return journal
 
     # iso4 is guaranteed to be present via packaging dependencies
-    import iso4
+    # iso4 is a runtime dependency; mypy reports it as untyped so silence
+    # the complaint here.  the import is intentionally local to defer the
+    # dependency until needed.
+    import iso4  # type: ignore[import]
 
     abbrev = iso4.abbreviate(journal)
     return abbrev if abbrev and abbrev != journal else journal
