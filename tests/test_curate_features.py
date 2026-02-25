@@ -1,9 +1,8 @@
-import sys
-import pathlib
+import os
+import io
 import re
 
-# ensure workspace root is on path so that the bibliography package can be imported
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+from contextlib import redirect_stdout
 
 from bibliography.cli import curate_bibliography
 
@@ -34,7 +33,7 @@ def test_remove_unused_entries(tmp_path, monkeypatch):
 }
 """)
     # cite only A in tex
-    tex.write_text("This is a citation \cite{A}")
+    tex.write_text(r"This is a citation \cite{A}")
 
     curate_bibliography([bib], create_backups=False)
     content = bib.read_text()
@@ -54,7 +53,7 @@ def test_standardize_keys(tmp_path, monkeypatch):
   title={An Example Study},
 }
 """)
-    tex.write_text("Citation here \cite{oldkey}.")
+    tex.write_text(r"Citation here \cite{oldkey}.")
 
     curate_bibliography([bib], create_backups=False)
     content = bib.read_text()
@@ -80,12 +79,11 @@ def test_standardize_skipped_without_main(tmp_path, monkeypatch):
 """)
     # create some other tex file to mimic a project
     other = tmp_path / "chapter.tex"
-    other.write_text("Citation \cite{oldkey}")
+    other.write_text(r"Citation \cite{oldkey}")
     import os
     os.chdir(tmp_path)
 
-    import io
-    from contextlib import redirect_stdout
+    # using imports moved to top
 
     buf = io.StringIO()
     with redirect_stdout(buf):
@@ -150,7 +148,7 @@ def test_duplicate_title_consolidation(tmp_path, monkeypatch):
 }
 """)
     # cite both keys
-    tex.write_text("Citing both \cite{KeyA,KeyB} here.")
+    tex.write_text(r"Citing both \cite{KeyA,KeyB} here.")
 
     curate_bibliography([bib1, bib2], create_backups=False)
 

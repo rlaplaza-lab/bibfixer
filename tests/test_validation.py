@@ -1,9 +1,3 @@
-import sys
-import pathlib
-
-# ensure package imports work
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
-
 from bibliography import validation
 
 
@@ -69,12 +63,12 @@ def test_check_duplicate_titles(tmp_path, monkeypatch):
 
 def test_validate_bibliography_and_citations(tmp_path, monkeypatch):
     tex = tmp_path / "main.tex"
-    tex.write_text("cite \cite{A}")
+    tex.write_text(r"cite \cite{A}")
     bib = tmp_path / "main.bib"
     bib.write_text("""@article{A,title={T}}
 """)
     monkeypatch.chdir(tmp_path)
     assert validation.validate_bibliography()
     # missing citation
-    tex.write_text("cite \cite{B}")
+    tex.write_text(r"cite \cite{B}")
     assert not validation.validate_bibliography()

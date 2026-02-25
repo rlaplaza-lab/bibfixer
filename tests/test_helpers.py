@@ -1,3 +1,5 @@
+import re
+
 from bibliography import helpers
 
 
@@ -125,7 +127,7 @@ def test_generate_and_standardize_keys(tmp_path):
     assert all(k.startswith("Smith2021J") for k in mapping.values())
     content = bib.read_text()
     # ensure two different keys exist in file
-    keys = set(m.group(1) for m in __import__('re').finditer(r"@\w+\{([^,]+)", content))
+    keys = set(m.group(1) for m in re.finditer(r"@\w+\{([^,]+)", content))
     assert len(keys) == 2
 
 
@@ -154,6 +156,6 @@ def test_citation_patterns_constant():
     # manually apply patterns to extract keys
     found = set()
     for pattern in pats:
-        for match in __import__('re').findall(pattern, sample):
+        for match in re.findall(pattern, sample):
             found.update(k.strip() for k in match.split(','))
     assert found == {"A", "B", "C", "D", "E"}

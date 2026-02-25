@@ -1,10 +1,13 @@
-import sys
-import pathlib
+import re
 
-# ensure workspace root is on path so that the bibliography package can be imported
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
-
-from bibliography.core import walk_fields, _join_multiline_values, field_transform, parse_bib_file, write_bib_file, BibFile
+from bibliography.core import (
+    walk_fields,
+    _join_multiline_values,
+    field_transform,
+    parse_bib_file,
+    write_bib_file,
+    BibFile,
+)
 
 
 class DummyBib:

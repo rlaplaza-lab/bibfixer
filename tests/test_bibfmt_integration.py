@@ -1,9 +1,3 @@
-import sys
-import pathlib
-
-# ensure workspace root is on path so that the bibliography package can be imported
-sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
-
 from bibliography.cli import format_with_bibfmt
 
 
