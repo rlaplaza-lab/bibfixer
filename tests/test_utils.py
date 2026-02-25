@@ -3,8 +3,6 @@ from bibfixer.utils import (
     normalize_doi,
     normalize_url,
     normalize_keywords,
-    normalize_entry,
-    entries_are_identical,
     normalize_title,
 )
 
@@ -52,21 +50,6 @@ def test_normalize_unicode_and_url_and_keywords():
     assert normalize_keywords("Physics, Chemistry,  math ") == "physics,chemistry,math"
     assert normalize_keywords("   ") is None
     assert normalize_keywords(None) is None
-
-
-def test_normalize_entry_and_comparison():
-    entry1 = {"ID": "Key", "Title": "Test", "year": "2020"}
-    entry2 = {"ID": "Other", "title": "Test", "Year": "2020"}
-    norm1 = normalize_entry(entry1)
-    norm2 = normalize_entry(entry2)
-    # ID field should be removed and keys lowercased
-    assert "id" not in norm1
-    assert norm1 == norm2
-    # entries_are_identical uses normalize_entry internally
-    assert entries_are_identical(entry1, entry2)
-    # difference in another field should break identity
-    entry3 = {"ID": "Key", "title": "Test", "year": "2021"}
-    assert not entries_are_identical(entry1, entry3)
 
 
 def test_normalize_title_function():

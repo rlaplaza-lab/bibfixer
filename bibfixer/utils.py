@@ -55,26 +55,6 @@ def normalize_keywords(keywords: str | None) -> str | None:
     return ",".join(parts) if parts else None
 
 
-def normalize_entry(entry: dict) -> dict:
-    """Return a normalized copy of a BibTeX entry for comparison.
-
-    The returned dictionary omits the ``ID`` field and lowercases keys.
-    All values are cast to strings and stripped.
-    """
-    result: dict[str, str] = {}
-    for key, value in entry.items():
-        if key.upper() == "ID":
-            continue
-        result[key.lower()] = str(value).strip()
-    return result
-
-
-def entries_are_identical(entry1: dict, entry2: dict) -> bool:
-    """Return ``True`` if two entries are identical apart from their key.
-
-    This is a thin wrapper around :func:`normalize_entry`.
-    """
-    return normalize_entry(entry1) == normalize_entry(entry2)
 
 
 def normalize_title(title: str) -> str:

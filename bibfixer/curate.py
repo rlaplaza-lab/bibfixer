@@ -22,6 +22,19 @@ from . import core, utils, helpers
 from .core import BibFile
 from .core import FIELDS_TO_REMOVE
 
+# import frequently used fix routines at module level for simplicity
+from .fixes import (
+    fix_invalid_utf8_bytes,
+    fix_html_entities,
+    fix_malformed_author_fields,
+    remove_accents_from_names,
+    fix_problematic_unicode,
+    fix_unescaped_percent,
+    fix_legacy_year_fields,
+    fix_legacy_month_fields,
+    uncomment_bibtex_entries,
+)
+
 
 # ---------------------------------------------------------------------------
 # simple helpers
@@ -106,7 +119,6 @@ def update_with_betterbib(bib_file: Path) -> None:
 
     # some entries get commented-out; let the shared helper deal with it
     # once betterbib may comment entries; the shared fix handles it
-    from .fixes import uncomment_bibtex_entries
     uncomment_bibtex_entries(bib_file)
 
 
@@ -295,17 +307,6 @@ def consolidate_duplicate_dois(bib_files: Iterable[Path], duplicates: dict) -> d
 
 def _apply_basic_fixes(bib_file: Path) -> None:
     """Run the standard collection of small fix routines on *bib_file*."""
-    from .fixes import (
-        fix_invalid_utf8_bytes,
-        fix_html_entities,
-        fix_malformed_author_fields,
-        remove_accents_from_names,
-        fix_problematic_unicode,
-        fix_unescaped_percent,
-        fix_legacy_year_fields,
-        fix_legacy_month_fields,
-    )
-
     fix_invalid_utf8_bytes(bib_file)
     fix_html_entities(bib_file)
     fix_malformed_author_fields(bib_file)
@@ -461,7 +462,7 @@ def curate_bibliography(bib_files: Iterable[Path], create_backups: bool = True, 
 
     # initial statistics may be useful for reporting later
     # optionally collect statistics (not currently used)
-    _before = {bib.name: core.parse_bibtex_file(bib) for bib in bib_files}
+    # (previous implementation stashed _before here; it was never used.)
 
     # process each file individually
     for bib in bib_files:
@@ -498,19 +499,12 @@ def curate_bibliography(bib_files: Iterable[Path], create_backups: bool = True, 
         if title_map:
             helpers.update_tex_citations(helpers.collect_all_tex_files(), title_map)
 
-    # final formatting and fix pass
+    # final formatting and fix pass - reuse the basic fix helper to avoid
+    # repeating logic. we still run bibfmt once more and uncomment entries
+    # after everything settles.
     for bib in bib_files:
         format_with_bibfmt(bib)
-        from .fixes import fix_invalid_utf8_bytes, fix_html_entities, fix_malformed_author_fields, fix_problematic_unicode, fix_unescaped_percent, uncomment_bibtex_entries, fix_legacy_year_fields, fix_legacy_month_fields
-        uncomment_bibtex_entries(bib)
-        fix_invalid_utf8_bytes(bib)
-        fix_html_entities(bib)
-        fix_malformed_author_fields(bib)
-        fix_problematic_unicode(bib)
-        bf = BibFile(bib)
-        fix_unescaped_percent(bf)
-        fix_legacy_year_fields(bib)
-        fix_legacy_month_fields(bib)
+        _apply_basic_fixes(bib)
         uncomment_bibtex_entries(bib)
         print(f"  ✓ {bib.name}: All fixes applied")
 

@@ -62,7 +62,6 @@ from .validation import (  # noqa: F401
 )
 
 # helper shortcuts (these used to be defined inline in this module)
-get_bib_entries = helpers.get_bib_entries
 get_corresponding_bib = helpers.get_corresponding_bib
 collect_all_tex_files = helpers.collect_all_tex_files
 collect_all_bib_files = helpers.collect_all_bib_files

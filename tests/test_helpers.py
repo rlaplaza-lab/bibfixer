@@ -3,20 +3,6 @@ import re
 from bibfixer import helpers
 
 
-def test_get_bib_entries(tmp_path):
-    bib = tmp_path / "sample.bib"
-    bib.write_text("""@article{Key1,
-  title={Title},
-}
-
-@book{Key2,
-  author={Someone},
-}
-""")
-    entries = helpers.get_bib_entries(bib)
-    assert entries == {"Key1", "Key2"}
-
-
 def test_get_corresponding_bib(tmp_path, monkeypatch):
     # create structure with main.tex and references.bib
     tex = tmp_path / "main.tex"

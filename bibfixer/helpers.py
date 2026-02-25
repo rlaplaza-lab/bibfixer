@@ -8,19 +8,6 @@ from . import utils
 from .core import parse_bibtex_file, write_bib_file
 
 
-def get_bib_entries(bib_file: Path) -> Set[str]:
-    """Return normalized entry IDs from a BibTeX file."""
-    entries = parse_bibtex_file(bib_file)
-    if not entries:
-        return set()
-    ids: Set[str] = set()
-    for entry in entries.entries:
-        norm = utils.normalize_unicode(entry.get('ID', ''))
-        if norm:
-            ids.add(norm)
-    return ids
-
-
 # common citation patterns used when parsing and rewriting
 # ``.tex`` files.  These were previously hard-coded in two separate
 # functions; keeping a single constant reduces the chance of divergence and
