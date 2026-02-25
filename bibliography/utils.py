@@ -75,3 +75,17 @@ def entries_are_identical(entry1: dict, entry2: dict) -> bool:
     This is a thin wrapper around :func:`normalize_entry`.
     """
     return normalize_entry(entry1) == normalize_entry(entry2)
+
+
+def normalize_title(title: str) -> str:
+    """Canonicalise a title for loose comparisons.
+
+    Removes braces, collapses whitespace and punctuation, and lowercases the
+    result.  This is used by both curation and validation routines.
+    """
+    title = re.sub(r'[{}]', '', str(title))
+    # replace runs of hyphens or dashes with a single space
+    title = re.sub(r'[-–—]+', ' ', title)
+    # collapse any remaining whitespace
+    title = re.sub(r'\s+', ' ', title)
+    return title.strip().lower()

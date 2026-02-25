@@ -5,6 +5,7 @@ from bibliography.utils import (
     normalize_keywords,
     normalize_entry,
     entries_are_identical,
+    normalize_title,
 )
 
 
@@ -66,3 +67,12 @@ def test_normalize_entry_and_comparison():
     # difference in another field should break identity
     entry3 = {"ID": "Key", "title": "Test", "year": "2021"}
     assert not entries_are_identical(entry1, entry3)
+
+
+def test_normalize_title_function():
+    # braces removed, separators collapsed, lowercased
+    raw = "{A} Title---with  {Hyphens} and {SPACES}"
+    norm = normalize_title(raw)
+    assert norm == "a title with hyphens and spaces"
+    # different punctuation treated similarly
+    assert normalize_title("A – Title") == "a title"

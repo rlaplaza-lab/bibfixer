@@ -16,7 +16,7 @@ from bibtexparser.bparser import BibTexParser  # type: ignore[import]
 from bibtexparser.bwriter import BibTexWriter  # type: ignore[import]
 from bibtexparser.customization import convert_to_unicode  # type: ignore[import]
 
-# constant lists that were previously defined in the monolithic script
+# constant list that was previously defined in the monolithic script
 FIELDS_TO_REMOVE = [
     "file",
     "urldate",
@@ -32,10 +32,6 @@ FIELDS_TO_REMOVE = [
     "date-added",
     "date-modified",
 ]
-
-# fields that we might want to complain about or normalise later
-FIELDS_TO_CHECK: list[str] = []
-FIELDS_TO_NORMALISE: list[str] = []
 
 
 @dataclass
@@ -143,19 +139,6 @@ def field_transform(func: FieldTransform) -> Callable[[BibFile], int]:
     return wrapper
 
 
-# small helper used by tests and potentially elsewhere
-
-def _join_multiline_values(value: Any) -> Any:
-    """Concatenate multi-line or list-valued field contents into a single string.
-
-    ``bibtexparser`` sometimes returns a list for a field when the value spans
-    multiple lines; this helper ensures we always work with a simple string.
-    """
-    if isinstance(value, list):
-        return " ".join(str(v) for v in value)
-    if isinstance(value, str) and "\n" in value:
-        return " ".join(line.strip() for line in value.splitlines())
-    return value
 
 
 # convenience re‑exports, mirroring legacy behaviour

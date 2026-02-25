@@ -1,4 +1,3 @@
-import re
 
 from bibliography import cli
 from bibliography import curate

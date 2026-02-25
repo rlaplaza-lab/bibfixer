@@ -4,7 +4,7 @@ import pathlib
 # ensure workspace root is on path so that the bibliography package can be imported
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
-from bibliography.core import BibFile, _join_multiline_values
+from bibliography.core import BibFile
 
 
 def test_bibfile_read_write(tmp_path):
@@ -46,7 +46,12 @@ def test_multiline_value(tmp_path):
     bib = BibFile(path)
     entry = bib.entries[0]
     # bibtexparser may present the title as a list or a multiline string
-    joined = _join_multiline_values(entry.get("title"))
+    # ensure we can coerce to a single string for consumption
+    val = entry.get("title")
+    if isinstance(val, list):
+        joined = " ".join(str(v) for v in val)
+    else:
+        joined = str(val).replace("\n", " ")
     assert "First line" in joined
     assert "second line" in joined
     assert "\n" not in joined

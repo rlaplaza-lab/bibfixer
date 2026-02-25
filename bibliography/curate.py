@@ -105,7 +105,7 @@ def update_with_betterbib(bib_file: Path) -> None:
         pass
 
     # some entries get commented-out; let the shared helper deal with it
-    helpers.uncomment_citation = helpers.uncomment_citation if hasattr(helpers, 'uncomment_citation') else None
+    # once betterbib may comment entries; the shared fix handles it
     from .fixes import uncomment_bibtex_entries
     uncomment_bibtex_entries(bib_file)
 
@@ -225,26 +225,27 @@ def find_duplicate_dois(bib_files: Iterable[Path]) -> dict[str, list[dict]]:
     return {d: lst for d, lst in doi_map.items() if len({e['key'] for e in lst}) > 1}
 
 
-def score_key_for_doi(key: str) -> float:
-    """Internal scoring used by :func:`choose_best_key`.
-
-    The behaviour is intentionally simple and driven by tests.
-    """
-    s = 0.0
-    if key and key[0].isupper():
-        s += 10
-    if re.match(r'^[A-Z][a-z]+\d{4}', str(key)):
-        s += 20
-    if '_' not in str(key):
-        s += 5
-    s -= 0.1 * len(str(key))
-    return s
-
-
 def choose_best_key(entries_list: list[dict]) -> str:
-    """Pick the most sensible citation key from a list of DOI entries."""
+    """Pick the most sensible citation key from a list of DOI entries.
+
+    A simple heuristic is applied to score each key.  Uppercase first letters,
+    a pattern like ``Name2020`` and absence of underscores are favoured, with a
+    small penalty for length.  The scoring logic is intentionally localised
+    here to keep the public API minimal.
+    """
+    def score(k: str) -> float:
+        s = 0.0
+        if k and k[0].isupper():
+            s += 10
+        if re.match(r'^[A-Z][a-z]+\d{4}', str(k)):
+            s += 20
+        if '_' not in str(k):
+            s += 5
+        s -= 0.1 * len(str(k))
+        return s
+
     keys = list({e['key'] for e in entries_list})
-    return max(keys, key=score_key_for_doi)
+    return max(keys, key=score)
 
 
 def consolidate_duplicate_dois(bib_files: Iterable[Path], duplicates: dict) -> dict[str, str]:
@@ -290,14 +291,21 @@ def consolidate_duplicate_dois(bib_files: Iterable[Path], duplicates: dict) -> d
 # high-level workflows
 # ---------------------------------------------------------------------------
 
-def process_bib_file(bib_file: Path, create_backups: bool = True) -> None:
-    """Apply the standard series of fixes and formatting operations to one file."""
-    print(f"\nProcessing {bib_file.name}...")
-    if create_backups:
-        create_backup(bib_file)
-    update_with_betterbib(bib_file)
-    print("  Fixing invalid UTF-8 byte sequences...")
-    from .fixes import fix_invalid_utf8_bytes, fix_html_entities, fix_malformed_author_fields, remove_accents_from_names, fix_problematic_unicode, fix_unescaped_percent, uncomment_bibtex_entries, fix_legacy_year_fields, fix_legacy_month_fields
+
+
+def _apply_basic_fixes(bib_file: Path) -> None:
+    """Run the standard collection of small fix routines on *bib_file*."""
+    from .fixes import (
+        fix_invalid_utf8_bytes,
+        fix_html_entities,
+        fix_malformed_author_fields,
+        remove_accents_from_names,
+        fix_problematic_unicode,
+        fix_unescaped_percent,
+        fix_legacy_year_fields,
+        fix_legacy_month_fields,
+    )
+
     fix_invalid_utf8_bytes(bib_file)
     fix_html_entities(bib_file)
     fix_malformed_author_fields(bib_file)
@@ -305,20 +313,26 @@ def process_bib_file(bib_file: Path, create_backups: bool = True) -> None:
     fix_problematic_unicode(bib_file)
     bf = BibFile(bib_file)
     fix_unescaped_percent(bf)
-    format_with_bibfmt(bib_file)
-    print("  Checking for commented entries...")
-    uncomment_bibtex_entries(bib_file)
+    # legacy date fixes run at end
     fix_legacy_year_fields(bib_file)
     fix_legacy_month_fields(bib_file)
+
+
+def process_bib_file(bib_file: Path, create_backups: bool = True) -> None:
+    """Apply the standard series of fixes and formatting operations to one file."""
+    print(f"\nProcessing {bib_file.name}...")
+    if create_backups:
+        create_backup(bib_file)
+    update_with_betterbib(bib_file)
+    print("  Fixing invalid UTF-8 byte sequences...")
+    _apply_basic_fixes(bib_file)
+    format_with_bibfmt(bib_file)
+    print("  Checking for commented entries...")
+    from .fixes import uncomment_bibtex_entries
+    uncomment_bibtex_entries(bib_file)
     print(f"  Completed processing {bib_file.name}")
 
 
-def _normalize_title(title: str) -> str:
-    """Canonicalise a title for loose comparisons (used by consolidation)."""
-    title = re.sub(r'[{}]', '', str(title))
-    title = re.sub(r'\s+', ' ', title)
-    title = re.sub(r'[-–—]+', ' ', title)
-    return title.strip().lower()
 
 
 def consolidate_duplicate_titles(bib_files: Iterable[Path]) -> dict[str, str]:
@@ -330,7 +344,7 @@ def consolidate_duplicate_titles(bib_files: Iterable[Path]) -> dict[str, str]:
             continue
         for entry in db.entries:
             title = entry.get('title', '')
-            norm = _normalize_title(title)
+            norm = utils.normalize_title(title)
             if norm:
                 title_map[norm].append((bib, entry))
     duplicates = {t: e for t, e in title_map.items() if len(e) > 1}

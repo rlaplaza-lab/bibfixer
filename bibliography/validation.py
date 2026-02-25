@@ -14,7 +14,6 @@ from typing import Iterable, List
 
 from . import core, utils, helpers
 from .core import BibFile
-from .curate import _normalize_title
 
 
 def validate_citations() -> List[str]:
@@ -122,7 +121,7 @@ def check_duplicate_titles() -> int:
     for bib in bibs:
         for entry in core.parse_bib_file(bib):
             title = entry.get('title', '')
-            norm = _normalize_title(title)
+            norm = utils.normalize_title(title)
             if norm:
                 seen[norm].append({'key': entry.get('ID', ''), 'file': bib.name})
     duplicates = {t: e for t, e in seen.items() if len(e) > 1}

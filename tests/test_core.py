@@ -1,8 +1,6 @@
-import re
 
 from bibliography.core import (
     walk_fields,
-    _join_multiline_values,
     field_transform,
     parse_bib_file,
     write_bib_file,
@@ -43,17 +41,6 @@ def test_walk_fields_yields_expected_tuples():
     assert bib.entries[0]["foo"] == "BAR"
 
 
-def test_join_multiline_values():
-    # list input should be concatenated with spaces
-    assert _join_multiline_values(["a", "b", 123]) == "a b 123"
-
-    # string with newline should flatten to single spaced string
-    multi = "line1\nline2\n   line3"
-    assert _join_multiline_values(multi) == "line1 line2 line3"
-
-    # non-list, non-multiline returns unchanged
-    assert _join_multiline_values(42) == 42
-    assert _join_multiline_values("single line") == "single line"
 
 
 def test_field_transform_decorator_and_io(tmp_path):
