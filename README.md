@@ -17,9 +17,15 @@ via command-line options).  The utility performs the following operations
 1. Creates backups of the original files (`.backup` suffix) before making any
    changes.
 2. Normalises entry keys and fields using journal abbreviations where
-   appropriate (a small built-in mapping is provided, and users can extend
-   it); the ``journal`` field itself will be shortened when a match is
-   found.  Citation keys may additionally be standardised
+   appropriate.  The base mapping is now sourced from two CSV files
+   shipped with the package (general journals plus an ACS‑specific list);
+   callers may still mutate ``bibfixer.fixes.JOURNAL_ABBREVIATIONS`` to
+   add or override entries.  When a title isn’t found in the map a very
+   simple fallback heuristic generates an abbreviation from the initials of
+   the words in the journal name, ensuring that some shortening is
+   performed even if the optional ``betterbib`` helper crashes or is
+   unavailable; the ``journal`` field itself will be changed when a
+   replacement is computed.  Citation keys may additionally be standardised
    (AuthorYearJournalFirstTitleWord) **only if a `main.tex` file is present**,
    ensuring corresponding `.tex` updates.
 3. Removes unused bibliography entries (those not cited in any `.tex` file).
@@ -64,7 +70,18 @@ pytest
 The core library requires both `bibtexparser` and the formatting tool
 `bibfmt` (installed from GitHub, since it isn’t yet on PyPI).  Curation
 routines use `bibfmt` by default to normalise and drop non-standard fields.
-Other helpers such as `betterbib` or `pybtex` remain optional extras.
+Other helpers such as `betterbib` or `pybtex` remain optional extras; when
+`betterbib` is installed we call it twice during curation:
+
+* `betterbib update` to pull updated metadata (DOIs, titles, etc.)
+* `betterbib abbreviate-journal-names -i` to apply the tool's internal
+  journal mapping, optionally supplemented via an extra JSON file
+  (`--extra-abbrev-file`).
+
+If either invocation fails (timeout, crash, non‑zero exit code) the workflow
+prints a warning and continues; our built-in map/heuristic will still run
+later as a fallback, so you always see some abbreviation.  Crash messages
+include the signal number (e.g. "crashed with signal 11").
 
 Install the package normally, which will pull in bibfmt:
 

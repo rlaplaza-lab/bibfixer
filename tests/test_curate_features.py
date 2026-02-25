@@ -48,7 +48,7 @@ def test_standardize_keys(tmp_path, disable_bibfmt):
     bib.write_text("""@article{oldkey,
   author={Smith, John and Doe, Jane},
   year={2021},
-  journal={Journal of Testing},
+  journal={Journal of the American Chemical Society},
   title={An Example Study},
 }
 """)
@@ -58,8 +58,10 @@ def test_standardize_keys(tmp_path, disable_bibfmt):
     content = bib.read_text()
     # expected pattern should start with Smith2021 and include journal initials
     assert re.search(r"Smith2021\w+An", content)
-    # journal field should now be abbreviated thanks to the mapping
-    assert re.search(r"journal\s*=\s*\{J\. Test\.\}", content)
+    # journal field should now be abbreviated thanks to the mapping;
+    # bibfmt may strip spaces or punctuation, accept several variants of the
+    # ACS abbreviation.
+    assert re.search(r"journal\s*=\s*\{J\. ?Am\. ?Chem\. ?Soc\.?\}", content)
     # tex should use the generated key
     # the generated key is always followed by a comma when bibfmt
     # re-formats the entry so allow either comma or closing brace
@@ -67,6 +69,20 @@ def test_standardize_keys(tmp_path, disable_bibfmt):
     assert newkey_match is not None
     newkey = newkey_match.group(1)
     assert re.search(r"cite\{" + re.escape(newkey) + r"\}", tex.read_text())
+
+
+def test_acs_abbreviation_varied_cases(tmp_path, disable_bibfmt):
+    # ensure small differences in capitalization are handled by lookup
+    tex = setup_simple_project(tmp_path)
+    bib = tmp_path / "refs.bib"
+    for variant in [
+        "journal of the american chemical society",
+        "Journal Of The American Chemical Society",
+    ]:
+        bib.write_text("@article{K,\n  journal={" + variant + "},\n}\n")
+        tex.write_text(r"\cite{K}")
+        curate_bibliography([bib], create_backups=False)
+        assert re.search(r"journal\s*=\s*\{J\. ?Am\. ?Chem\. ?Soc\.?\}", bib.read_text())
 
 
 def test_standardize_skipped_without_main(tmp_path, disable_bibfmt):
@@ -145,6 +161,113 @@ def test_betterbib_suspicious_change_restores(tmp_path, monkeypatch, capsys):
     captured2 = capsys.readouterr()
     assert "betterbib update had issues" in captured2.out
     assert "bad stuff" in captured2.out
+
+
+def test_betterbib_negative_return_signal(tmp_path, monkeypatch, capsys):
+    # simulate a crash (signal) from the betterbib subprocess
+    bib = tmp_path / "test.bib"
+    bib.write_text("@article{X, title={T}}\n")
+
+    def fake_run(cmd, capture_output, text, timeout):
+        class R:
+            returncode = -11
+            stderr = ""
+            stdout = ""
+        return R()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    from bibfixer.cli import update_with_betterbib
+    update_with_betterbib(bib)
+    captured = capsys.readouterr()
+    assert "crashed with signal 11" in captured.out
+    assert "betterbib update had issues" in captured.out
+    # original file should remain untouched (backup restored)
+    assert bib.read_text().startswith("@article{X")
+
+
+def test_abbreviate_journal_names_heuristic(tmp_path, disable_bibfmt):
+    tex = setup_simple_project(tmp_path)
+    bib = tmp_path / "refs.bib"
+    # choose a journal not present in the tiny built-in mapping
+    bib.write_text("""@article{A,
+  journal={Some Very Long Journal Name},
+  title={Test},
+}
+""")
+    tex.write_text(r"\cite{A}")
+
+    curate_bibliography([bib], create_backups=False)
+    content = bib.read_text()
+    # journal should be abbreviated by the heuristic (initial letters)
+    assert re.search(r"journal\s*=\s*\{S\.V\.L\.J\.N\.\}", content)
+    # the entry itself should still be present (key not important here)
+    assert "@article" in content
+
+
+def test_betterbib_abbreviation_command_invoked(tmp_path, monkeypatch):
+    # the new subcommand should be invoked and should modify the file
+    bib = tmp_path / "refs.bib"
+    bib.write_text("@article{A, journal={Journal of the American Chemical Society}}\n")
+
+    calls = []
+    class R:
+        def __init__(self):
+            self.returncode = 0
+            self.stderr = ""
+            self.stdout = ""
+
+    def fake_run(cmd, capture_output, text, timeout):
+        calls.append(cmd.copy())
+        if 'abbreviate-journal-names' in cmd:
+            bib.write_text("@article{A, journal={J. Am. Chem. Soc.}}\n")
+        return R()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    from bibfixer.cli import process_bib_file
+    process_bib_file(bib, create_backups=False)
+
+    assert any('abbreviate-journal-names' in c for c in calls)
+    # bibfmt may remove spaces between initials
+    assert re.search(r"journal\s*=\s*\{J\. ?Am\. ?Chem\. ?Soc\.?\}", bib.read_text())
+
+
+def test_heuristic_skip_already_abbreviated():
+    from bibfixer.fixes import _heuristic_abbrev
+    # normal expansion for a long name (uses simple initials heuristic)
+    assert _heuristic_abbrev("Journal of Testing") == "J.o.T."
+    # if the journal already contains a period we treat it as done
+    assert _heuristic_abbrev("J. Test.") == "J. Test."
+
+
+def test_betterbib_abbrev_even_if_update_crashes(tmp_path, monkeypatch, capsys):
+    # update step fails but abbreviation still executes
+    bib = tmp_path / "refs.bib"
+    bib.write_text("@article{A, journal={Journal of the American Chemical Society}}\n")
+
+    calls = []
+    class R:
+        def __init__(self, returncode):
+            self.returncode = returncode
+            self.stderr = ""
+            self.stdout = ""
+
+    def fake_run(cmd, capture_output, text, timeout):
+        calls.append(cmd.copy())
+        if 'update' in cmd:
+            return R(-11)
+        if 'abbreviate-journal-names' in cmd:
+            bib.write_text("@article{A, journal={J. Am. Chem. Soc.}}\n")
+            return R(0)
+        return R(0)
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    from bibfixer.cli import process_bib_file
+    process_bib_file(bib, create_backups=False)
+
+    captured = capsys.readouterr()
+    assert "crashed with signal 11" in captured.out
+    assert any('abbreviate-journal-names' in c for c in calls)
+    assert "J." in bib.read_text()
 
 
 def test_duplicate_title_consolidation(tmp_path, disable_bibfmt):

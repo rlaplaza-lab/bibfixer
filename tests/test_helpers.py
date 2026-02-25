@@ -99,13 +99,13 @@ def test_generate_and_standardize_keys(tmp_path):
     bib.write_text("""@article{first,
   author={Smith, John and Doe, Jane},
   year={2021},
-  journal={Journal of Testing},
+  journal={Journal of the American Chemical Society},
   title={An Example Study},
 }
 @article{second,
   author={Smith, John and Doe, Jane},
   year={2021},
-  journal={Journal of Testing},
+  journal={Journal of the American Chemical Society},
   title={Another Example},
 }
 """)
@@ -147,3 +147,17 @@ def test_citation_patterns_constant():
         for match in re.findall(pattern, sample):
             found.update(k.strip() for k in match.split(','))
     assert found == {"A", "B", "C", "D", "E"}
+
+
+def test_journal_abbreviation_data_loaded():
+    # the public dictionary should contain at least one well-known mapping
+    from bibfixer import fixes
+
+    assert isinstance(fixes.JOURNAL_ABBREVIATIONS, dict)
+    # include a sample entry from the ACS file
+    assert "Journal of the American Chemical Society" in fixes.JOURNAL_ABBREVIATIONS
+    assert fixes.JOURNAL_ABBREVIATIONS["Journal of the American Chemical Society"] == "J. Am. Chem. Soc."
+
+    # ensure the dict can be mutated by clients
+    fixes.JOURNAL_ABBREVIATIONS["Foo Bar"] = "F. B."
+    assert fixes.JOURNAL_ABBREVIATIONS["Foo Bar"] == "F. B."

@@ -235,13 +235,44 @@ def fix_html_entities(bib_file: Path) -> int:
 
 
 
-# very small mapping used for journal name abbreviation.  In the
-# real world this could be extended or loaded from a file, but for the
-# purposes of the test suite a minimal dictionary is sufficient.
-JOURNAL_ABBREVIATIONS: dict[str, str] = {
-    # commonly used entry in tests
-    'Journal of Testing': 'J. Test.',
-}
+# abbreviation data now lives in CSV files shipped in the package.  The
+# loader below reads both the general list and the ACS-specific list, giving
+# the latter priority when a title appears in both.  Keeping a mutable
+# dictionary as the public ``JOURNAL_ABBREVIATIONS`` variable preserves the
+# previous API so callers may still add or modify entries at runtime.
+
+def _load_journal_abbreviations() -> dict[str, str]:
+    """Return a fresh mapping built from the packaged CSV resources.
+
+    The two files are located in the ``bibfixer.data`` package and are read
+    with :mod:`importlib.resources` so that they work both in development
+    and after installation.  We deliberately *do not* suppress file errors:
+    the abbreviation data is considered essential, and an import-time
+    exception will prompt the user to fix their installation rather than
+    silently falling back to an empty map.
+    """
+    import csv
+    import importlib.resources as pkg_resources
+
+    abbrevs: dict[str, str] = {}
+    for resource in (
+        "journal_abbreviations_general.csv",
+        "journal_abbreviations_acs.csv",
+    ):
+        with pkg_resources.open_text("bibfixer.data", resource, encoding="utf-8") as fh:
+            reader = csv.reader(fh)
+            for row in reader:
+                if len(row) >= 2:
+                    full = row[0].strip()
+                    short = row[1].strip()
+                    if full and short:
+                        abbrevs[full] = short
+    return abbrevs
+
+
+# public dictionary that callers can extend or mutate; its initial contents
+# come from the CSV loader above.
+JOURNAL_ABBREVIATIONS: dict[str, str] = _load_journal_abbreviations()
 
 
 def fix_unescaped_percent(bib_file: Path | core.BibFile) -> int:
@@ -291,23 +322,72 @@ def fix_unescaped_percent(bib_file: Path | core.BibFile) -> int:
     return changed
 
 
+def _heuristic_abbrev(journal: str) -> str:
+    """Generate a crude abbreviation for *journal*.
+
+    If the title contains two or more words we take the first letter of each
+    non‑empty piece and join them with periods.  This is intentionally
+    simplistic – it is meant as a fallback when no explicit mapping is
+    available (for example if ``betterbib`` crashed during a run).  The
+    heuristic is only applied when the result differs from the original
+    string, which means single-word titles are left untouched.
+    """
+    # if the string already contains a period we assume it has been
+    # abbreviated (either manually or by ``betterbib``) and leave it alone.
+    if '.' in journal:
+        return journal
+    words = journal.split()
+    if len(words) < 2:
+        return journal
+    chars = [w[0] for w in words if w and w[0].isalpha()]
+    if not chars:
+        return journal
+    return ".".join(chars) + '.'
+
+
 def abbreviate_journal_names(bib_file: Path) -> int:
     """Replace long journal titles with their abbreviations.
 
-    A very small built-in dictionary is used; callers may modify or extend
-    this as needed.  Only exact matches are replaced but the comparison is
-    case-sensitive to avoid accidentally mangling legitimate titles.
+    A very small built-in dictionary is used by default; callers may modify
+    or extend :data:`JOURNAL_ABBREVIATIONS` to add their own entries.  If a
+    title is not found in the mapping a simple heuristic is used to shorten
+    it by taking the initial letters of each word.  This ensures that users
+    still see *some* abbreviation even when external tools such as
+    ``betterbib`` are unavailable or fail (segfaults, timeouts, etc.).
+
+    Only exact matches are looked up in the dictionary and the comparison is
+    case-sensitive to avoid accidentally mangling legitimate titles.  The
+    heuristic is only invoked when there are two or more words in the
+    journal title and the generated abbreviation differs from the original.
+
     Returns the number of entries modified.
     """
     bib_database = core.parse_bibtex_file(bib_file)
     if not bib_database:
         return 0
     fixed = 0
+    # build a case-insensitive lookup so that user data need not match
+    # the exact capitalization found in the CSV files.  We normalise keys to
+    # lower-case when checking, but preserve the original mapping values in
+    # the public dictionary.
+    ci_lookup = {k.lower(): v for k, v in JOURNAL_ABBREVIATIONS.items()}
+
     for entry in bib_database.entries:
         journal = entry.get('journal')
-        if journal and journal in JOURNAL_ABBREVIATIONS:
-            entry['journal'] = JOURNAL_ABBREVIATIONS[journal]
+        if not journal:
+            continue
+        lookup_key = journal.lower()
+        if lookup_key in ci_lookup:
+            entry['journal'] = ci_lookup[lookup_key]
             fixed += 1
+        else:
+            # try a basic fallback abbreviation so we don't rely purely
+            # on the mapping; this also covers the case where betterbib
+            # crashed earlier in the pipeline.
+            abbrev = _heuristic_abbrev(journal)
+            if abbrev != journal:
+                entry['journal'] = abbrev
+                fixed += 1
     if fixed:
         core.write_bib_file(bib_file, bib_database)
         print(f"  Abbreviated {fixed} journal name(s)")

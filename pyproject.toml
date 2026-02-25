@@ -38,3 +38,13 @@ test = ["pytest", "ruff", "mypy"]
 
 [project.scripts]
 bibfixer = "bibfixer.cli:main"
+
+[tool.setuptools]
+# include our CSV mapping files in the installed package
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["bibfixer"]
+
+[tool.setuptools.package-data]
+"bibfixer" = ["data/*.csv"]
