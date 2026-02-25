@@ -73,3 +73,31 @@ def test_format_with_bibfmt_warns_on_meta_change(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "Warning: bibfmt appears to have altered title" in out
     assert "Warning: bibfmt changed DOI" in out
+
+
+def test_format_with_bibfmt_no_meta_warning(tmp_path, monkeypatch, capsys):
+    # bibfmt rewrites spacing but leaves title/doi unchanged; no warnings
+    bib_path = tmp_path / "sample.bib"
+    bib_path.write_text("""@article{key,
+  title={Same},
+  doi={10.1000/xyz},
+}
+""")
+
+    def fake_run(cmd, capture_output, text, timeout):
+        # rewrite file with identical values but different formatting
+        bib_path.write_text("""@article{key,
+ title={Same},
+ doi={10.1000/xyz},
+}
+""")
+        class Result:
+            returncode = 0
+            stderr = ""
+        return Result()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    format_with_bibfmt(bib_path)
+    out = capsys.readouterr().out
+    assert "altered title" not in out
+    assert "changed DOI" not in out

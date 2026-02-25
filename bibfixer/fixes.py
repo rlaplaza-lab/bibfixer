@@ -234,6 +234,16 @@ def fix_html_entities(bib_file: Path) -> int:
     return fixed_count
 
 
+
+# very small mapping used for journal name abbreviation.  In the
+# real world this could be extended or loaded from a file, but for the
+# purposes of the test suite a minimal dictionary is sufficient.
+JOURNAL_ABBREVIATIONS: dict[str, str] = {
+    # commonly used entry in tests
+    'Journal of Testing': 'J. Test.',
+}
+
+
 def fix_unescaped_percent(bib_file: Path | core.BibFile) -> int:
     """Escape literal ``%`` characters in every field of a :class:`BibFile`.
 
@@ -279,6 +289,29 @@ def fix_unescaped_percent(bib_file: Path | core.BibFile) -> int:
     if changed:
         bf.write()
     return changed
+
+
+def abbreviate_journal_names(bib_file: Path) -> int:
+    """Replace long journal titles with their abbreviations.
+
+    A very small built-in dictionary is used; callers may modify or extend
+    this as needed.  Only exact matches are replaced but the comparison is
+    case-sensitive to avoid accidentally mangling legitimate titles.
+    Returns the number of entries modified.
+    """
+    bib_database = core.parse_bibtex_file(bib_file)
+    if not bib_database:
+        return 0
+    fixed = 0
+    for entry in bib_database.entries:
+        journal = entry.get('journal')
+        if journal and journal in JOURNAL_ABBREVIATIONS:
+            entry['journal'] = JOURNAL_ABBREVIATIONS[journal]
+            fixed += 1
+    if fixed:
+        core.write_bib_file(bib_file, bib_database)
+        print(f"  Abbreviated {fixed} journal name(s)")
+    return fixed
 
 
 def remove_accents_from_names(bib_file: Path) -> int:

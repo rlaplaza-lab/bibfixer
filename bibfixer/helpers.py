@@ -12,12 +12,16 @@ from .core import parse_bibtex_file, write_bib_file
 # ``.tex`` files.  These were previously hard-coded in two separate
 # functions; keeping a single constant reduces the chance of divergence and
 # makes the behaviour easier to test.
+# common citation patterns used when parsing and rewriting
+# ``.tex`` files.  Historically the original script only knew about a
+# handful of natbib commands but real documents often employ a variety of
+# citation macros (\parencite, \textcite, \autocite, etc.).  Rather than
+# maintaining a long hard-coded list we match any command containing the
+# word ``cite`` with optional alphabetic prefixes/suffixes.  This keeps
+# the behaviour broad enough for most LaTeX packages while remaining easy
+# to test.
 CITATION_PATTERNS: list[str] = [
-    r'\\cite\{([^}]+)\}',
-    r'\\citep\{([^}]+)\}',
-    r'\\citet\{([^}]+)\}',
-    r'\\citeauthor\{([^}]+)\}',
-    r'\\citeyear\{([^}]+)\}',
+    r'\\[A-Za-z]*cite[a-zA-Z]*\{([^}]+)\}',
 ]
 
 

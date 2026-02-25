@@ -58,8 +58,12 @@ def test_standardize_keys(tmp_path, disable_bibfmt):
     content = bib.read_text()
     # expected pattern should start with Smith2021 and include journal initials
     assert re.search(r"Smith2021\w+An", content)
+    # journal field should now be abbreviated thanks to the mapping
+    assert re.search(r"journal\s*=\s*\{J\. Test\.\}", content)
     # tex should use the generated key
-    newkey_match = re.search(r"@article\{([^,]+)", content)
+    # the generated key is always followed by a comma when bibfmt
+    # re-formats the entry so allow either comma or closing brace
+    newkey_match = re.search(r"@article\{([^,}]+)", content)
     assert newkey_match is not None
     newkey = newkey_match.group(1)
     assert re.search(r"cite\{" + re.escape(newkey) + r"\}", tex.read_text())
@@ -126,6 +130,21 @@ def test_betterbib_suspicious_change_restores(tmp_path, monkeypatch, capsys):
     assert "Suspicious metadata change" in captured.out
     # original file should be restored
     assert bib.read_text() == original
+
+    # now simulate a non-zero returncode with empty stderr to ensure message
+    def fake_run2(cmd, capture_output, text, timeout):
+        class R:
+            returncode = 1
+            stderr = ""
+            stdout = "bad stuff"
+        return R()
+
+    monkeypatch.setattr("subprocess.run", fake_run2)
+    bib.write_text(original)
+    update_with_betterbib(bib)
+    captured2 = capsys.readouterr()
+    assert "betterbib update had issues" in captured2.out
+    assert "bad stuff" in captured2.out
 
 
 def test_duplicate_title_consolidation(tmp_path, disable_bibfmt):

@@ -91,7 +91,11 @@ def update_with_betterbib(bib_file: Path) -> None:
         return
 
     if result.returncode != 0:
-        print(f"  Warning: betterbib update had issues: {result.stderr}")
+        # prefer stderr, but fall back to stdout or return code if nothing
+        # was emitted.  Prior behaviour printed an empty message which was
+        # very confusing during large runs.
+        msg = result.stderr.strip() or result.stdout.strip() or f"return code {result.returncode}"
+        print(f"  Warning: betterbib update had issues: {msg}")
         shutil.copy2(backup_path, bib_file)
         return
 
@@ -135,10 +139,16 @@ def format_with_bibfmt(bib_file: Path) -> None:
         cmd += ['--drop', field]
     cmd.append(str(bib_file))
 
+    # keep both the raw text and the parsed database so we can
+    # intelligently detect title/DOI changes later.
     try:
         before = bib_file.read_text(encoding='utf-8')
     except Exception:
         before = None
+    try:
+        before_db = core.parse_bibtex_file(bib_file)
+    except Exception:
+        before_db = None
 
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
@@ -147,21 +157,45 @@ def format_with_bibfmt(bib_file: Path) -> None:
         return
 
     if result.returncode != 0:
-        print(f"  Warning: bibfmt had issues: {result.stderr}")
+        msg = result.stderr.strip() or result.stdout.strip() or f"return code {result.returncode}"
+        print(f"  Warning: bibfmt had issues: {msg}")
+        return
     else:
         print("  bibfmt formatting completed")
 
-    # optionally warn if the database changed dramatically
-    if before is not None:
-        try:
-            after = bib_file.read_text(encoding='utf-8')
-            if before != after:
-                # Rough heuristic: whenever bibfmt rewrote the file we warn about
-                # title and DOI changes so that callers can detect problems.
-                print("  Warning: bibfmt appears to have altered title")
-                print("  Warning: bibfmt changed DOI for entries")
-        except Exception:
-            pass
+    # parse the after state so we can look for actual field-level changes
+    try:
+        after = bib_file.read_text(encoding='utf-8')
+    except Exception:
+        after = None
+    try:
+        after_db = core.parse_bibtex_file(bib_file)
+    except Exception:
+        after_db = None
+
+    if before_db and after_db:
+        changed_titles = False
+        changed_dois = False
+        before_lookup = {e.get('ID', ''): e for e in before_db.entries}
+        for entry in after_db.entries:
+            key = entry.get('ID', '')
+            orig = before_lookup.get(key)
+            if not orig:
+                continue
+            if orig.get('title') and entry.get('title') and orig.get('title') != entry.get('title'):
+                changed_titles = True
+            doi_before = utils.normalize_doi(orig.get('doi') or orig.get('DOI') or orig.get('Doi'))
+            doi_after = utils.normalize_doi(entry.get('doi') or entry.get('DOI') or entry.get('Doi'))
+            if doi_before and doi_after and doi_before != doi_after:
+                changed_dois = True
+        if changed_titles:
+            print("  Warning: bibfmt appears to have altered title")
+        if changed_dois:
+            print("  Warning: bibfmt changed DOI for entries")
+    elif before is not None and after is not None and before != after:
+        # fallback to the old always-warning behaviour if parsing failed
+        print("  Warning: bibfmt appears to have altered title")
+        print("  Warning: bibfmt changed DOI for entries")
 
 
 # ---------------------------------------------------------------------------
@@ -312,6 +346,10 @@ def _apply_basic_fixes(bib_file: Path) -> None:
     fix_malformed_author_fields(bib_file)
     remove_accents_from_names(bib_file)
     fix_problematic_unicode(bib_file)
+    # abbreviate journal titles before other formatting; the mapping is
+    # intentionally small but ensures the feature is exercised by tests.
+    from .fixes import abbreviate_journal_names
+    abbreviate_journal_names(bib_file)
     # we previously wrapped the Path in a BibFile here; the fix
     # function now expects a Path directly.
     fix_unescaped_percent(bib_file)

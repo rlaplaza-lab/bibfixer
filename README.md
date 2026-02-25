@@ -17,13 +17,18 @@ via command-line options).  The utility performs the following operations
 1. Creates backups of the original files (`.backup` suffix) before making any
    changes.
 2. Normalises entry keys and fields using journal abbreviations where
-   appropriate; citation keys may additionally be standardised
+   appropriate (a small built-in mapping is provided, and users can extend
+   it); the ``journal`` field itself will be shortened when a match is
+   found.  Citation keys may additionally be standardised
    (AuthorYearJournalFirstTitleWord) **only if a `main.tex` file is present**,
    ensuring corresponding `.tex` updates.
 3. Removes unused bibliography entries (those not cited in any `.tex` file).
 4. Detects and consolidates duplicate references, first by DOI and then by
    title (loose matching ignores case, braces and punctuation).
 5. Applies formatting fixes (via ``bibfmt``) and removes non‑standard fields.
+6. When validating, a summary of missing or commented citations is printed,
+   along with a breakdown of how many of the citations in each file were
+   actually found to be valid.
 6. Generates a detailed report on all changes made, written to standard
    output.
 

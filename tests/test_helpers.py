@@ -46,14 +46,16 @@ def test_collect_all_files(tmp_path, monkeypatch):
 
 def test_extract_and_update_citations(tmp_path):
     tex = tmp_path / "foo.tex"
-    tex.write_text(r"""This is a citation \cite{A,B} and another \citet{C}.""")
+    tex.write_text(r"""This is a citation \cite{A,B}, a parenthetical \parencite{C}, and a
+\textcite{D}.""")
+    # the generic citation pattern should catch all three commands
     keys = helpers.extract_citations_from_tex(tex)
-    assert keys == {"A", "B", "C"}
+    assert keys == {"A", "B", "C", "D"}
 
-    mapping = {"A": "A1", "C": "C1"}
+    mapping = {"A": "A1", "D": "D1"}
     helpers.update_tex_citations([tex], mapping)
     new = tex.read_text()
-    assert "A1" in new and "C1" in new
+    assert "A1" in new and "D1" in new
     assert "cite{A,B}" not in new
 
 

@@ -67,6 +67,29 @@ def test_fix_unescaped_percent(tmp_path):
     assert bib.read_text() == before
 
 
+def test_fix_unescaped_percent_without_global_bibfile(tmp_path, monkeypatch):
+    """Regression test for #XYZ: missing ``BibFile`` name in ``fixes``.
+
+    The user reported a ``NameError`` when running the CLI in a real‑world
+    workload; the symbol had been removed or not imported in some contexts.
+    We mimic that situation by deleting the attribute from the module and
+    ensure the fix function still works.
+    """
+    bib = tmp_path / 'test2.bib'
+    bib.write_text("""@article{K,
+  title={50% valid},
+}
+""")
+    import bibfixer.fixes as fixes
+    # remove the global reference if it exists
+    monkeypatch.delattr(fixes, "BibFile", raising=False)
+
+    # calling via the fixes module directly bypasses the CLI wrapper
+    changed = fixes.fix_unescaped_percent(bib)
+    assert changed >= 1
+    assert r"50\% valid" in bib.read_text()
+
+
 def test_uncomment_bibtex_entries(tmp_path):
     bib = tmp_path / 'comment.bib'
     # simple commented entry introduced by bibfmt

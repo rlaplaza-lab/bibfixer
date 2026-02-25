@@ -17,7 +17,7 @@ from .core import BibFile
 
 
 def validate_citations() -> List[str]:
-    """Ensure that every \cite command has a corresponding bib entry.
+    r"""Ensure that every \cite command has a corresponding bib entry.
 
     Returns a list of issue descriptions (empty if everything checks out).
     """
@@ -40,8 +40,12 @@ def validate_citations() -> List[str]:
             if k:
                 all_bib_entries.add(k)
                 cr = entry.get('crossref') or entry.get('Crossref', '')
+                # normalize_unicode may return None; only record if we got a
+                # real string so the dict stays typed correctly.
                 if cr:
-                    crossrefs[k] = utils.normalize_unicode(cr)
+                    norm_cr = utils.normalize_unicode(cr)
+                    if norm_cr:
+                        crossrefs[k] = norm_cr
         try:
             content = bib.read_text(encoding='utf-8')
         except Exception:
@@ -49,9 +53,15 @@ def validate_citations() -> List[str]:
         for match in re.finditer(r'@comment\s*\{@\w+\{([^,}]+)', content):
             commented_entries.add(utils.normalize_unicode(match.group(1).strip()))
 
+    missing_keys: set[str] = set()
+    commented_keys: set[str] = set()
+
     for tex in tex_files:
-        bib = helpers.get_corresponding_bib(tex)
-        if not bib:
+        # ``get_corresponding_bib`` returns ``Optional[Path]`` so store it
+        # in a differently named variable to avoid shadowing the ``bib``
+        # loop variable used above.
+        corresponding_bib: Path | None = helpers.get_corresponding_bib(tex)
+        if not corresponding_bib:
             all_issues.append(f"{tex.name}: no bib file")
             continue
         citations = helpers.extract_citations_from_tex(tex)
@@ -59,18 +69,39 @@ def validate_citations() -> List[str]:
         missing = citations - all_bib_entries
         commented = [c for c in citations if utils.normalize_unicode(c) in commented_entries]
         if missing:
+            missing_keys.update(missing)
             all_issues.extend(f"{tex.name}: missing {k}" for k in sorted(missing))
         if commented:
+            commented_keys.update(commented)
             all_issues.extend(f"{tex.name}: commented {k}" for k in sorted(commented))
-        if not missing and not commented:
-            total_valid += len(citations)
+        # count each citation that was not missing or commented.  This
+        # gives a more accurate "valid" total rather than penalising an
+        # entire file because a single citation failed.
+        total_valid += len(citations) - len(missing) - len(commented)
 
     # crossref check
-    for entry, cr in crossrefs.items():
-        if cr not in all_bib_entries:
-            all_issues.append(f"missing crossref: {entry} -> {cr}")
 
+    # crossref check
+    # avoid reusing ``entry`` (earlier a dict) so mypy doesn't complain
+    for entry_key, cr in crossrefs.items():
+        if cr not in all_bib_entries:
+            all_issues.append(f"missing crossref: {entry_key} -> {cr}")
+
+    # print any individual issues so that callers (and users) can see
+    # which citations were missing or commented without having to inspect the
+    # returned list.
+    if all_issues:
+        for issue in all_issues:
+            print(issue)
     print(f"Summary: {total_valid}/{total_citations} citations valid")
+    if missing_keys:
+        print(f"  Missing citation keys ({len(missing_keys)}): {', '.join(sorted(missing_keys)[:10])}")
+        if len(missing_keys) > 10:
+            print("  ...")
+    if commented_keys:
+        print(f"  Commented-out citation keys ({len(commented_keys)}): {', '.join(sorted(commented_keys)[:10])}")
+        if len(commented_keys) > 10:
+            print("  ...")
     return all_issues
 
 
@@ -79,23 +110,28 @@ def validate_bib_file(bib_file: Path):
     db = core.parse_bibtex_file(bib_file)
     if not db:
         return None
+    # use local counters so mypy sees them as ``int`` rather than ``Any``
+    entries_with_doi = 0
+    entries_with_title = 0
+    entries_with_author = 0
+    entries_with_year = 0
+    for entry in db.entries:
+        if entry.get('doi'):
+            entries_with_doi += 1
+        if entry.get('title'):
+            entries_with_title += 1
+        if entry.get('author'):
+            entries_with_author += 1
+        if entry.get('year'):
+            entries_with_year += 1
     stats = {
         'file': str(bib_file),
         'entry_count': len(db.entries),
-        'entries_with_doi': 0,
-        'entries_with_title': 0,
-        'entries_with_author': 0,
-        'entries_with_year': 0,
+        'entries_with_doi': entries_with_doi,
+        'entries_with_title': entries_with_title,
+        'entries_with_author': entries_with_author,
+        'entries_with_year': entries_with_year,
     }
-    for entry in db.entries:
-        if entry.get('doi'):
-            stats['entries_with_doi'] += 1
-        if entry.get('title'):
-            stats['entries_with_title'] += 1
-        if entry.get('author'):
-            stats['entries_with_author'] += 1
-        if entry.get('year'):
-            stats['entries_with_year'] += 1
     return stats
 
 
@@ -150,7 +186,12 @@ def check_duplicate_dois() -> int:
             k = utils.normalize_unicode(entry.get('ID', ''))
             norm = utils.normalize_doi(entry.get('doi') or entry.get('DOI') or entry.get('Doi'))
             if norm:
-                doi_map[norm].append(core.EntryMeta(key=k, file=bf.path, entry=entry))
+                # ``EntryMeta`` requires a non‑None key; falling back to empty
+                # string is safe because the algorithms below only care about
+                # duplicates and an empty key will simply be ignored in practice.
+                doi_map[norm].append(
+                    core.EntryMeta(key=k or '', file=bf.path, entry=entry)
+                )
     count = 0
     for doi, metas in doi_map.items():
         if len({m.key for m in metas}) > 1:

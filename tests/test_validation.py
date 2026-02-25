@@ -72,3 +72,21 @@ def test_validate_bibliography_and_citations(tmp_path, monkeypatch):
     # missing citation
     tex.write_text(r"cite \cite{B}")
     assert not validation.validate_bibliography()
+
+
+def test_validate_citations_prints_details(tmp_path, monkeypatch, capsys):
+    tex = tmp_path / "main.tex"
+    tex.write_text(r"Multiple \cite{A,C} and one \parencite{B}.")
+    bib = tmp_path / "main.bib"
+    bib.write_text("""@article{A,title={T}}
+@article{B,title={T2}}
+""")
+    monkeypatch.chdir(tmp_path)
+    # run only citation validation to capture output
+    validation.validate_citations()
+    out = capsys.readouterr().out
+    # should report C as missing, but B and A valid
+    assert any("missing C" in line for line in out.splitlines())
+    assert "Summary: 2/3 citations valid" in out
+    assert "Missing citation keys" in out
+    assert "C" in out
