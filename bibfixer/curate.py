@@ -2,7 +2,7 @@
 
 Most of the heavy lifting that used to live in ``cli.py`` has been moved
 here so that the command‑line driver can stay lean.  All functions are
-fully exercised by tests and re-exported from :mod:`bibliography.cli` for
+fully exercised by tests and re-exported from :mod:`bibfixer.cli` for
 backwards compatibility.
 
 The public API is intentionally minimal; callers usually invoke
@@ -453,7 +453,7 @@ def remove_unused_entries(bib_files: Iterable[Path]) -> int:
 def curate_bibliography(bib_files: Iterable[Path], create_backups: bool = True, preserve_keys: bool = False) -> None:
     """Run the full curation workflow on a list of files.
 
-    See :mod:`bibliography.cli` for the original documentation and steps.
+    See :mod:`bibfixer.cli` for the original documentation and steps.
     """
     print("=" * 70)
     print("BibTeX Curation")

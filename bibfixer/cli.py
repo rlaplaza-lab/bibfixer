@@ -2,8 +2,8 @@
 """Command line interface for the *bibfmt* package.
 
 This module used to contain nearly two thousand lines of logic; most of the
-heavy lifting has now been moved into :mod:`bibliography.curate` and
-:mod:`bibliography.validation`.  The remaining code is just a small wrapper
+heavy lifting has now been moved into :mod:`bibfixer.curate` and
+:mod:`bibfixer.validation`.  The remaining code is just a small wrapper
 that exposes the familiar ``validate`` / ``curate`` / ``polish`` commands.
 
 The export names are preserved for backwards compatibility so that existing

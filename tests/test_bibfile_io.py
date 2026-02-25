@@ -1,10 +1,10 @@
 import sys
 import pathlib
 
-# ensure workspace root is on path so that the bibliography package can be imported
+# ensure workspace root is on path so that the bibfixer package can be imported
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
-from bibliography.core import BibFile
+from bibfixer.core import BibFile
 
 
 def test_bibfile_read_write(tmp_path):

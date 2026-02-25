@@ -1,4 +1,4 @@
-from bibliography.utils import (
+from bibfixer.utils import (
     normalize_unicode,
     normalize_doi,
     normalize_url,
@@ -10,10 +10,10 @@ from bibliography.utils import (
 
 
 def test_version():
-    import bibliography
+    import bibfixer
 
-    assert hasattr(bibliography, "__version__")
-    assert isinstance(bibliography.__version__, str)
+    assert hasattr(bibfixer, "__version__")
+    assert isinstance(bibfixer.__version__, str)
 
 
 def test_normalize_doi_basic():

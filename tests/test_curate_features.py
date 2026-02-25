@@ -3,7 +3,7 @@ import re
 
 from contextlib import redirect_stdout
 
-from bibliography.cli import curate_bibliography
+from bibfixer.cli import curate_bibliography
 
 
 def setup_simple_project(tmp_path):
@@ -121,7 +121,7 @@ def test_betterbib_suspicious_change_restores(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr("subprocess.run", fake_run)
 
     # call update_with_betterbib and capture warnings
-    from bibliography.cli import update_with_betterbib
+    from bibfixer.cli import update_with_betterbib
     update_with_betterbib(bib)
 
     captured = capsys.readouterr()

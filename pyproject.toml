@@ -34,4 +34,4 @@ pybtex = ["pybtex>=0.24"]
 test = ["pytest", "ruff", "mypy"]
 
 [project.scripts]
-bibfixer = "bibliography.cli:main"
+bibfixer = "bibfixer.cli:main"

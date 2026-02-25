@@ -1,4 +1,4 @@
-from bibliography.cli import format_with_bibfmt
+from bibfixer.cli import format_with_bibfmt
 
 
 def test_format_with_bibfmt_removes_fields(tmp_path):
@@ -40,7 +40,7 @@ def test_curate_uses_bibfmt(tmp_path, monkeypatch):
 """)
 
     # import the function that processes a single file
-    from bibliography.cli import process_bib_file
+    from bibfixer.cli import process_bib_file
 
     process_bib_file(bib_file, create_backups=False)
     # one of the calls should include 'bibfmt'

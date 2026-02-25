@@ -1,4 +1,4 @@
-from bibliography import validation
+from bibfixer import validation
 
 
 def test_check_file_correspondence(tmp_path, monkeypatch):

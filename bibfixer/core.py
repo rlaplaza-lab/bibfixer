@@ -1,4 +1,4 @@
-"""Core data structures and helpers for the bibliography script.
+"""Core data structures and helpers for the bibfixer script.
 
 This module contains the :class:`BibFile` abstraction around a path and a
 parsed BibTeX database, utilities for walking and transforming the fields of

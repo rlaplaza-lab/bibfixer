@@ -1,4 +1,4 @@
-"""Validation utilities for bibliography files.
+"""Validation utilities for bibliography files (used by bibfixer).
 
 This module contains a loose collection of checks that were previously
 implemented inline inside ``cli.py``.  They are mostly useful for the

@@ -1,6 +1,6 @@
 import re
 
-from bibliography import helpers
+from bibfixer import helpers
 
 
 def test_get_bib_entries(tmp_path):

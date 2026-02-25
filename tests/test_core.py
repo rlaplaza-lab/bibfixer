@@ -1,5 +1,5 @@
 
-from bibliography.core import (
+from bibfixer.core import (
     walk_fields,
     field_transform,
     parse_bib_file,

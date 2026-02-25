@@ -1,4 +1,4 @@
-"""Top-level imports for the bibliography package."""
+"""Top-level imports for the bibfixer package."""
 
 __version__ = "0.1.1"
 

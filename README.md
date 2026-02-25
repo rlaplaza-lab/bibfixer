@@ -77,7 +77,7 @@ bibfixer --help
 A `pyproject.toml` is provided so the library can be built with `build` or
 installed via `pip install .`.  Before a release:
 
-1. Bump the version in `bibliography/__init__.py` and `pyproject.toml`.
+1. Bump the version in `bibfixer/__init__.py` and `pyproject.toml`.
 2. Add release notes or changelog entries.
 3. Build wheel and sdist (`python -m build`).
 4. Upload to PyPI with `twine`.

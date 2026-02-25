@@ -1,7 +1,7 @@
 
-from bibliography import cli
-from bibliography import curate
-from bibliography.core import BibFile
+from bibfixer import cli
+from bibfixer import curate
+from bibfixer.core import BibFile
 
 
 def test_cli_aliases():
