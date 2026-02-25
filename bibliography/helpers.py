@@ -21,6 +21,19 @@ def get_bib_entries(bib_file: Path) -> Set[str]:
     return ids
 
 
+# common citation patterns used when parsing and rewriting
+# ``.tex`` files.  These were previously hard-coded in two separate
+# functions; keeping a single constant reduces the chance of divergence and
+# makes the behaviour easier to test.
+CITATION_PATTERNS: list[str] = [
+    r'\\cite\{([^}]+)\}',
+    r'\\citep\{([^}]+)\}',
+    r'\\citet\{([^}]+)\}',
+    r'\\citeauthor\{([^}]+)\}',
+    r'\\citeyear\{([^}]+)\}',
+]
+
+
 def get_corresponding_bib(tex_file: Path) -> Path | None:
     """Return the bib file we expect to accompany *tex_file*.
 
@@ -104,13 +117,8 @@ def extract_citations_from_tex(tex_file: Path) -> Set[str]:
     except Exception:
         return set()
 
-    patterns = [
-        r'\\cite\{([^}]+)\}',
-        r'\\citep\{([^}]+)\}',
-        r'\\citet\{([^}]+)\}',
-        r'\\citeauthor\{([^}]+)\}',
-        r'\\citeyear\{([^}]+)\}',
-    ]
+    # patterns defined at module level to keep behaviour consistent
+    patterns = CITATION_PATTERNS
 
     citations: Set[str] = set()
     for pattern in patterns:
@@ -144,13 +152,7 @@ def update_tex_citations(tex_files: Iterable[Path],
             continue
 
         original_content = content
-        patterns = [
-            r'\\cite\{([^}]+)\}',
-            r'\\citep\{([^}]+)\}',
-            r'\\citet\{([^}]+)\}',
-            r'\\citeauthor\{([^}]+)\}',
-            r'\\citeyear\{([^}]+)\}',
-        ]
+        patterns = CITATION_PATTERNS
 
         def replace_citations(match):
             keys_str = match.group(1)

@@ -134,10 +134,7 @@ def field_transform(func: FieldTransform) -> Callable[[BibFile], int]:
     def wrapper(bibfile: BibFile) -> int:
         changed = 0
         for entry, field, value in walk_fields(bibfile):
-            try:
-                new_value = func(value)
-            except Exception:
-                new_value = value
+            new_value = func(value)
             if new_value is not None and new_value != value:
                 entry[field] = new_value
                 changed += 1

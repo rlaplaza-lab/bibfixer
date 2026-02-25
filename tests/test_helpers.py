@@ -142,3 +142,18 @@ def test_generate_citation_key_various():
     # numeric start gives empty key when no alphabetic content is found
     entry2 = {"author": "1234","year":"","journal":"","title":""}
     assert helpers._generate_citation_key(entry2) == ""
+
+
+def test_citation_patterns_constant():
+    # ensure the public constant is defined and matches expected regexes
+    assert hasattr(helpers, 'CITATION_PATTERNS')
+    pats = helpers.CITATION_PATTERNS
+    assert isinstance(pats, list) and pats
+    # a simple string containing each kind of citation should be parsed
+    sample = r"\cite{A}\citep{B}, \citet{C} \citeauthor{D} \citeyear{E}"
+    # manually apply patterns to extract keys
+    found = set()
+    for pattern in pats:
+        for match in __import__('re').findall(pattern, sample):
+            found.update(k.strip() for k in match.split(','))
+    assert found == {"A", "B", "C", "D", "E"}

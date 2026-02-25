@@ -84,3 +84,25 @@ def test_field_transform_decorator_and_io(tmp_path):
     # re-read and verify
     bib2 = BibFile(path)
     assert bib2.entries[0]["title"] == "WORLD"
+
+
+def test_field_transform_propagates_exceptions(tmp_path):
+    # a transform that raises should not be swallowed by the decorator
+    path = tmp_path / "err.bib"
+    path.write_text("""@article{e,
+  title={ok},
+}
+""")
+    bib = BibFile(path)
+
+    @field_transform
+    def boom(value):
+        raise RuntimeError("oops")
+
+    try:
+        boom(bib)
+    except RuntimeError as exc:
+        assert "oops" in str(exc)
+    else:
+        # if no exception was raised, that's a problem
+        assert False, "field_transform should propagate exceptions"
