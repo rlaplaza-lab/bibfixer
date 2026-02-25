@@ -20,14 +20,14 @@ via command-line options).  The utility performs the following operations
    appropriate.  The base mapping is now sourced from two CSV files
    shipped with the package (general journals plus an ACS‑specific list);
    callers may still mutate ``bibfixer.fixes.JOURNAL_ABBREVIATIONS`` to
-   add or override entries.  When a title isn’t found in the map we attempt
-   to apply an ISO 4 standard abbreviation via the optional ``iso4``
-   package.  This dependency is imported lazily and any import or runtime
-   errors are ignored – the original title is left unchanged rather than
-   inventing a bogus abbreviation.  The ``journal`` field itself will only
-   be modified when a genuine abbreviation is available.  Citation keys may
-   additionally be standardised (AuthorYearJournalFirstTitleWord) **only if a
-   `main.tex` file is present**, ensuring corresponding `.tex` updates.
+   add or override entries.  When a title isn’t found in the map we apply an ISO 4 standard
+   abbreviation via the ``iso4`` package, which is now a mandatory
+   dependency of the project.  If the library itself fails the exception will
+   propagate rather than being swallowed; this makes installation problems
+   obvious early.  The ``journal`` field itself will only be modified when a
+   genuine abbreviation is available.  Citation keys may additionally be
+   standardised (AuthorYearJournalFirstTitleWord) **only if a `main.tex`
+   file is present**, ensuring corresponding `.tex` updates.
 3. Removes unused bibliography entries (those not cited in any `.tex` file).
 4. Detects and consolidates duplicate references, first by DOI and then by
    title (loose matching ignores case, braces and punctuation).
@@ -67,15 +67,17 @@ mypy .
 pytest
 ```
 
-The core library requires both `bibtexparser` and the formatting tool
-`bibfmt` (installed from GitHub, since it isn’t yet on PyPI).  Curation
-routines use `bibfmt` by default to normalise and drop non-standard fields.
-Other helpers such as `betterbib` or `pybtex` remain optional extras; we
-recommend installing `betterbib` from the upstream GitHub repository rather
-than PyPI, as discussed in :file:`pyproject.toml`, since this project tracks
-that source more closely and allows local patches during development.  During
-active development you can clone the repo alongside this project and install
-it in editable mode:
+The core library requires `bibtexparser`, the formatting tool
+`bibfmt` (installed from GitHub, since it isn’t yet on PyPI), and
+`betterbib` (also pulled from GitHub).  The latter is no longer an optional
+extra: the CLI uses it unconditionally during curation and the dependency is
+recorded in :file:`pyproject.toml` using a direct URL to the
+`rlaplaza-lab/betterbib` repository.  This ensures that CI jobs and end users
+have a consistent installation that matches the version we test against.
+
+For development you still might want a local copy of `betterbib` so you can
+apply or test patches before they are merged upstream.  One convenient setup
+is to clone the repo alongside this project and install it in editable mode:
 
 ```sh
 cd /path/to/bibfixer
@@ -89,12 +91,14 @@ safeguards (faulthandler enabled, extra error handling) that help when
 well.  **Note**: the upstream repository stores its large ``journals.json``
 file in Git LFS.  `pip install` from GitHub does *not* fetch LFS objects, so
 an install may end up with a tiny pointer file instead of the real data.  In
-in those situations the abbreviation subcommand will be skipped with a warning.  Our
-built-in mapping (and, if installed, the optional ``iso4`` package) will still
-be consulted later; if neither produces a valid ISO 4 abbreviation the full
-journal title is left untouched.  The command-line flag
-`--no-betterbib` (or environment variable ``BIBFIXER_NO_BETTERBIB``) can be
-used to disable both the update and abbreviation steps entirely.
+those situations the abbreviation subcommand will be skipped with a warning, but
+catering to this corner case is less critical now that betterbib is a
+standard dependency.  Our built-in mapping (and, if installed, the optional
+``iso4`` package) will still be consulted later; if neither produces a valid
+ISO 4 abbreviation the full journal title is left untouched.  The
+command-line flag `--no-betterbib` (or environment variable
+``BIBFIXER_NO_BETTERBIB``) can be used to disable both the update and
+abbreviation steps entirely (for offline runs or troubleshooting).
 
 When `betterbib` is installed we call it twice during curation:
 
@@ -104,9 +108,10 @@ When `betterbib` is installed we call it twice during curation:
   (`--extra-abbrev-file`).
 
 If either invocation fails (timeout, crash, non‑zero exit code) the workflow
-prints a warning and continues; our built-in map (and optionally ``iso4``) will
-still run later as a fallback, though it will refrain from inventing a
-spurious abbreviation.  Crash messages include the signal number (e.g.
+prints a warning and continues; our built-in map and the ISO 4
+abbreviation provided by the mandatory ``iso4`` package will still run
+later as a fallback, though it will refrain from inventing a spurious
+abbreviation.  Crash messages include the signal number (e.g.
 "crashed with signal 11").
 
 Install the package normally, which will pull in bibfmt:

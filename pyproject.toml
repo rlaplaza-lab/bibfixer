@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bibfixer"
-version = "0.1.5"
+version = "0.1.8"
 description = "Utility library and CLI for managing LaTeX bibliography files."
 authors = [
     {name = "Your Name", email = "you@example.com"},
@@ -31,24 +31,19 @@ dependencies = [
     # bibfmt is a mandatory formatting helper; install via GitHub as it isn't
     # on PyPI yet.
     "bibfmt @ git+https://github.com/rlaplaza-lab/bibfmt.git",
-    # ISO 4 journal abbreviations used as a fallback when no explicit mapping
-    # is available.  The package is optional at runtime but installing it
-    # allows more realistic abbreviations; imports are guarded so absence
-    # does not break the CLI.
+    # betterbib is a required helper; install straight from our lab repo so CI
+    # always has it and the CLI can depend on its features.  The version is
+    # determined by whatever branch/head is currently referenced.
+    "betterbib @ git+https://github.com/rlaplaza-lab/betterbib.git",
+    # ISO 4 journal abbreviation support is required for the built-in
+    # heuristic that replaces unrecognised titles.  The package pulls in
+    # `nltk` and requires appropriate data (eg. wordnet) to be available.
     "iso4>=0.0.2",
 ]
 
+# betterbib is no longer optional; see ``dependencies`` above.
+# (We leave ``pybtex`` as an optional feature used only in extended workflows.)
 [project.optional-dependencies]
-# optional features that require third-party tools not on PyPI or only needed
-# for extended curation workflows.  ``betterbib`` is fetched directly from the
-# upstream GitHub repository rather than PyPI so that fixes (including
-# local patches applied during development) can be pulled in more quickly.
-# The URL points at the canonical source; users can override it by
-# installing manually from a fork or a local copy if desired.
-betterbib = [
-    # PEP 508 direct URL syntax: <name> @ <url>
-    "betterbib @ git+https://github.com/rlaplaza/betterbib.git@main",
-]
 pybtex = ["pybtex>=0.24"]
 
 # development/test tools

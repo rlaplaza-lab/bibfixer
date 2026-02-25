@@ -122,9 +122,8 @@ def test_betterbib_suspicious_change_restores(tmp_path, monkeypatch, capsys):
     bib = tmp_path / "test.bib"
     bib.write_text(original)
 
-    # pretend betterbib is installed so the CLI tries to run it
-    import importlib.util
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
+    # betterbib is a required dependency; we don't need to fake its
+    # presence.  tests below will stub the subprocess call itself.
 
     # fake subprocess.run to rewrite bib file with bad data
     def fake_run(cmd, capture_output, text, timeout):
@@ -172,9 +171,7 @@ def test_betterbib_negative_return_signal(tmp_path, monkeypatch, capsys):
     bib = tmp_path / "test.bib"
     bib.write_text("@article{X, title={T}}\n")
 
-    # emulate betterbib being present
-    import importlib.util
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
+    # the package should already be importable; nothing to patch here.
 
     def fake_run(cmd, capture_output, text, timeout):
         class R:
@@ -197,6 +194,16 @@ def test_process_skip_betterbib(tmp_path, monkeypatch, capsys):
     # using the flag to disable betterbib should avoid subprocess calls
     bib = tmp_path / "refs.bib"
     bib.write_text("@article{A, journal={Some Journal}}\n")
+
+    # iso4 is a required dependency and may attempt to load NLTK data when
+    # abbreviating; ensure the routine is stubbed out so this test doesn't
+    # trigger a wordnet lookup.
+    try:
+        import iso4
+    except ImportError:  # shouldn't happen in a correctly configured env
+        pass
+    else:
+        monkeypatch.setattr(iso4, "abbreviate", lambda j: j)
 
     called = False
     def fake_run(cmd, *args, **kwargs):
@@ -323,15 +330,22 @@ def test_abbreviate_journal_names_heuristic(tmp_path, disable_bibfmt, monkeypatc
     # the entry itself should still be present (key not important here)
     assert "@article" in content
 
+    # also confirm a more realistic journal name is passed through the
+    # helper correctly when iso4 returns something non-trivial.  update the
+    # tex file so the new entry is cited and not removed as unused.
+    bib.write_text("@article{B, journal={Digital Discovery}, title={Foo}}\n")
+    tex.write_text(r"\\cite{B}")
+    monkeypatch.setattr(iso4, "abbreviate", lambda j: "Digit. Disc." if j == "Digital Discovery" else j)
+    curate_bibliography([bib], create_backups=False)
+    assert "Digit. Disc." in bib.read_text()
+
 
 def test_betterbib_abbreviation_command_invoked(tmp_path, monkeypatch):
     # the new subcommand should be invoked and should modify the file
     bib = tmp_path / "refs.bib"
     bib.write_text("@article{A, journal={Journal of the American Chemical Society}}\n")
 
-    # pretend betterbib is installed so abbreviation step runs
-    import importlib.util
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
+    # package available by default in our test environment.
 
     calls = []
     class R:
@@ -367,32 +381,13 @@ def test_heuristic_skip_already_abbreviated(monkeypatch):
     assert _heuristic_abbrev("J. Test.") == "J. Test."
 
 
-def test_heuristic_no_iso4(monkeypatch):
-    """If the ``iso4`` package isn’t available or raises an error we leave the
-    journal name unchanged rather than inventing an abbreviation.
-    """
-    from bibfixer.fixes import _heuristic_abbrev
-    import builtins
-
-    # force ``import iso4`` to fail
-    orig_import = builtins.__import__
-    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
-        if name == "iso4":
-            raise ImportError
-        return orig_import(name, globals, locals, fromlist, level)
-    monkeypatch.setattr(builtins, "__import__", fake_import)
-
-    assert _heuristic_abbrev("Journal of Testing") == "Journal of Testing"
-
 
 def test_betterbib_abbrev_even_if_update_crashes(tmp_path, monkeypatch, capsys):
     # update step fails but abbreviation still executes
     bib = tmp_path / "refs.bib"
     bib.write_text("@article{A, journal={Journal of the American Chemical Society}}\n")
 
-    # ensure abbreviation step is attempted by pretending betterbib exists
-    import importlib.util
-    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
+    # betterbib is always importable; we only need to watch subprocess calls.
 
     calls = []
     class R:
