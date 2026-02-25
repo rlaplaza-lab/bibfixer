@@ -334,7 +334,7 @@ def test_abbreviate_journal_names_heuristic(tmp_path, disable_bibfmt, monkeypatc
     # helper correctly when iso4 returns something non-trivial.  update the
     # tex file so the new entry is cited and not removed as unused.
     bib.write_text("@article{B, journal={Digital Discovery}, title={Foo}}\n")
-    tex.write_text(r"\\cite{B}")
+    tex.write_text(r"\cite{B}")
     monkeypatch.setattr(iso4, "abbreviate", lambda j: "Digit. Disc." if j == "Digital Discovery" else j)
     curate_bibliography([bib], create_backups=False)
     assert "Digit. Disc." in bib.read_text()
