@@ -1,10 +1,13 @@
 """Normalization utilities extracted from the original script."""
 
+from __future__ import annotations
+
 import unicodedata
 import re
+from typing import Optional
 
 
-def normalize_unicode(text: str | None) -> str | None:
+def normalize_unicode(text: Optional[str]) -> Optional[str]:
     """Normalize Unicode strings for comparison.
 
     Returns ``None`` for falsy input to make caller logic simpler.
@@ -14,7 +17,7 @@ def normalize_unicode(text: str | None) -> str | None:
     return unicodedata.normalize("NFC", str(text))
 
 
-def normalize_doi(doi: str | None) -> str | None:
+def normalize_doi(doi: Optional[str]) -> Optional[str]:
     """Normalize DOI strings to a canonical lowercase form without prefix."""
     if not doi:
         return None
@@ -32,7 +35,7 @@ def normalize_doi(doi: str | None) -> str | None:
     return doi.strip()
 
 
-def normalize_url(url: str | None) -> str | None:
+def normalize_url(url: Optional[str]) -> Optional[str]:
     """Basic URL cleaning: strip whitespace and lower-case scheme."""
     if not url:
         return None
@@ -41,7 +44,7 @@ def normalize_url(url: str | None) -> str | None:
     return re.sub(r"^[A-Za-z]+://", lambda m: m.group(0).lower(), url)
 
 
-def normalize_keywords(keywords: str | None) -> str | None:
+def normalize_keywords(keywords: Optional[str]) -> Optional[str]:
     """Canonicalise a comma-separated keyword list.
 
     - split on commas
