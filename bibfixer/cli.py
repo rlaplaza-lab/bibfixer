@@ -100,10 +100,12 @@ Examples:
     parser.add_argument('--no-backup', action='store_true', help='Skip creating backup files during curation')
     parser.add_argument('--yes', '-y', action='store_true', help='Skip confirmation prompt and proceed automatically')
     parser.add_argument('--preserve-keys', action='store_true', help='Do not modify citation keys (skip sanitization and consolidation)')
+    parser.add_argument('--no-betterbib', action='store_true', help='Skip running betterbib even if available')
 
     args = parser.parse_args()
 
     bib_files = collect_all_bib_files()
+    use_betterbib = not args.no_betterbib
     if not bib_files:
         print("No .bib files found in sections/ directory or root")
         return 1
@@ -117,7 +119,12 @@ Examples:
             if resp.lower() != 'y':
                 print("Aborted.")
                 return 0
-        curate_bibliography(bib_files, create_backups=not args.no_backup, preserve_keys=args.preserve_keys)
+        curate_bibliography(
+            bib_files,
+            create_backups=not args.no_backup,
+            preserve_keys=args.preserve_keys,
+            use_betterbib=use_betterbib,
+        )
         return 0
 
     # polish
@@ -137,7 +144,12 @@ Examples:
     print("\n\n" + "=" * 80)
     print("Step 2: Curation and cleanup")
     print("=" * 80)
-    curate_bibliography(bib_files, create_backups=not args.no_backup, preserve_keys=args.preserve_keys)
+    curate_bibliography(
+        bib_files,
+        create_backups=not args.no_backup,
+        preserve_keys=args.preserve_keys,
+        use_betterbib=use_betterbib,
+    )
 
     print("\n\n" + "=" * 80)
     print("Step 3: Final validation")

@@ -323,28 +323,24 @@ def fix_unescaped_percent(bib_file: Path | core.BibFile) -> int:
 
 
 def _heuristic_abbrev(journal: str) -> str:
-    """Try to obtain an ISO 4 abbreviation for *journal*.
+    """Return an ISO 4 abbreviation for *journal*.
 
-    We used to fall back to a very coarse scheme that simply joined the
-    initial letters of each word.  That produced fabricated abbreviations such
-    as ``"J.o.T."`` for "Journal of Testing" which gave a false impression
-    of legitimacy.  Instead we now rely on the third-party ``iso4`` package
-    (installed as an optional dependency) to perform the transformation.  The
-    function behaves as follows::
+    The routine now depends on the ``iso4`` package, which is a **required
+    runtime dependency** for bibfixer.  Users are expected to have the
+    appropriate NLTK data installed as part of their environment; if the
+    library raises an exception the error will propagate so that the
+    installation problem is noticed rather than silently ignored.
 
-        * if the journal string already contains a period we assume it has
-          been manually abbreviated and return it unchanged;
-        * single-word titles are left untouched;
-        * if ``iso4`` cannot be imported or raises any exception the original
-          title is returned rather than inventing a bogus abbreviation;
-        * otherwise ``iso4.abbreviate`` is called and its result is used if
-          it differs from the input.
+    Behaviour is straightforward:
 
-    The publication’s title is only modified when a genuine abbreviation is
-    available; callers may still extend :data:`JOURNAL_ABBREVIATIONS` with
-    custom mappings if desired.
+    * strings already containing a period are assumed to have been
+      manually abbreviated and are returned unchanged;
+    * single-word titles are left alone;
+    * otherwise ``iso4.abbreviate`` is invoked and its result is returned if
+      different from the input; if the result equals the input the original
+      title is preserved.
     """
-    # treat anything already containing a period as pre‑abbreviated
+    # already abbreviated
     if '.' in journal:
         return journal
 
@@ -352,19 +348,11 @@ def _heuristic_abbrev(journal: str) -> str:
     if len(words) < 2:
         return journal
 
-    try:
-        import iso4  # optional dependency
-    except ImportError:  # pragma: no cover - behaviour exercised in tests
-        return journal
+    # iso4 is guaranteed to be present via packaging dependencies
+    import iso4
 
-    try:
-        abbrev = iso4.abbreviate(journal)
-    except Exception:  # pragma: no cover - tested by forcing an error
-        return journal
-
-    if abbrev and abbrev != journal:
-        return abbrev
-    return journal
+    abbrev = iso4.abbreviate(journal)
+    return abbrev if abbrev and abbrev != journal else journal
 
 
 def abbreviate_journal_names(bib_file: Path) -> int:
