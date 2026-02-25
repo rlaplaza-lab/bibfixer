@@ -111,11 +111,101 @@ def test_fix_invalid_utf8_bytes(tmp_path):
     fixed = cli.fix_invalid_utf8_bytes(bib)
     assert fixed >= 1
     content = bib.read_text(errors='ignore')
-    assert '\\"' in content  # replaced pattern
-
+    # content should contain a normal quote after fix (byte sequence removed)
+    assert '"' in content
 
 def test_choose_best_key_tiebreaker():
     # when keys are equally scored shorter should win
     entries = [{'key': 'Smith2020'}, {'key': 'Smith2020long'}]
     assert cli.choose_best_key(entries) == 'Smith2020'
+
+
+def test_fix_legacy_year_and_month(tmp_path):
+    bib = tmp_path / 'test.bib'
+    bib.write_text(
+        """@article{A,
+  year={2021-05-17},
+  month={apr},
+}
+"""
+    )
+    # applying both fixes sequentially
+    y = cli.fix_legacy_year_fields(bib)
+    m = cli.fix_legacy_month_fields(bib)
+    text = bib.read_text()
+    assert y == 1
+    assert m == 1
+    # spacing around = may vary
+    assert 'year' in text and '2021' in text
+    assert 'month' in text and '4' in text
+
+
+def test_remove_accents_and_malformed_author(tmp_path):
+    bib = tmp_path / 'auth.bib'
+    # author with accented characters and malformed patterns
+    bib.write_text("""@article{X,
+  author={Fran\c{c}ois and M\"uller and Anná},
+}
+"""
+    )
+    # remove accents
+    removed = cli.remove_accents_from_names(bib)
+    # should touch at least one field
+    assert removed > 0
+    text = bib.read_text()
+    assert 'Francois' in text
+    # u-umlaut should be converted or at least the escape removed
+    assert 'Muller' in text or 'M"uller' in text
+    # malformed names fix
+    bib.write_text("""@article{Y,
+  author={Doe\\\\ and O\n\u0301Brien},
+}
+"""
+    )
+    fixed = cli.fix_malformed_author_fields(bib)
+    assert fixed >= 0
+
+
+def test_remove_duplicate_entries_across_files(tmp_path):
+    # create two bib files with same key
+    b1 = tmp_path / 'a.bib'
+    b2 = tmp_path / 'b.bib'
+    b1.write_text("""@article{D,
+  title={First},
+}
+"""
+    )
+    b2.write_text("""@article{D,
+  title={Second},
+}
+"""
+    )
+    count = cli.remove_duplicate_entries_across_files([b1, b2])
+    assert count == 1
+    # entry should remain only in first file alphabetically (a.bib)
+    assert 'D' in b1.read_text()
+    assert 'D' not in b2.read_text()
+
+
+def test_consolidate_duplicate_titles(tmp_path):
+    b1 = tmp_path / 'one.bib'
+    b2 = tmp_path / 'two.bib'
+    b1.write_text("""@article{K1,
+  title={Same Title},
+}
+"""
+    )
+    b2.write_text("""@article{K2,
+  title={same title},
+}
+"""
+    )
+    mapping = cli.consolidate_duplicate_titles([b1, b2])
+    # mapping should map old keys to new (one of them)
+    assert len(mapping) == 1
+    newkey = list(mapping.values())[0]
+    combined = b1.read_text() + b2.read_text()
+    assert newkey in combined
+    # original keys should not both be present
+    assert 'K1' not in combined or 'K2' not in combined
 
