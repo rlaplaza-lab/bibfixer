@@ -72,6 +72,7 @@ import argparse
 # this module lives inside the package)
 from . import BibFile  # type: ignore[attr-defined]
 from . import core, utils, helpers
+from .core import FIELDS_TO_REMOVE
 
 # helper shortcuts (imported for backwards compatibility)
 get_bib_entries = helpers.get_bib_entries
@@ -84,22 +85,6 @@ sanitize_citation_keys = helpers.sanitize_citation_keys
 standardize_citation_keys = helpers.standardize_citation_keys
 
 
-# Non-standard fields to remove
-FIELDS_TO_REMOVE = [
-    'file',
-    'urldate',
-    'langid',
-    'keywords',
-    'abstract',
-    'Bdsk-Url-1',
-    'Bdsk-Url-2',
-    'note',
-    'annote',
-    'comment',
-    'timestamp',
-    'date-added',
-    'date-modified',
-]
 
 
 # ============================================================================
@@ -660,7 +645,9 @@ def fix_html_entities(bib_file):
         except Exception as e:
             print(f"  Error writing {bib_file}: {e}")
             return 0
-    
+        return fixed_count
+    # end if modified
+    return fixed_count
 
 
 def fix_unescaped_percent(bib_file: BibFile):

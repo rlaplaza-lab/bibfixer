@@ -94,3 +94,51 @@ def test_sanitize_citation_keys(tmp_path):
     # the bad key should be sanitized to remove the exclamation mark
     assert mapping == {"Bad!Key": "BadKey"}
     assert "BadKey" in bib.read_text()
+
+
+def test_sanitize_no_changes(tmp_path):
+    bib = tmp_path / "empty.bib"
+    bib.write_text("")
+    mapping = helpers.sanitize_citation_keys(bib)
+    assert mapping == {}
+
+
+def test_generate_and_standardize_keys(tmp_path):
+    # two entries that would initially map to same canonical key
+    bib = tmp_path / "dup.bib"
+    bib.write_text("""@article{first,
+  author={Smith, John and Doe, Jane},
+  year={2021},
+  journal={Journal of Testing},
+  title={An Example Study},
+}
+@article{second,
+  author={Smith, John and Doe, Jane},
+  year={2021},
+  journal={Journal of Testing},
+  title={Another Example},
+}
+""")
+    mapping = helpers.standardize_citation_keys(bib)
+    # there should be two entries standardized; keys should differ by a suffix on second
+    assert len(mapping) == 2
+    assert all(k.startswith("Smith2021J") for k in mapping.values())
+    content = bib.read_text()
+    # ensure two different keys exist in file
+    keys = set(m.group(1) for m in __import__('re').finditer(r"@\w+\{([^,]+)", content))
+    assert len(keys) == 2
+
+
+def test_generate_citation_key_various():
+    # test _generate_citation_key output directly
+    entry = {
+        "author": "Doe, Jane and Roe, Richard",
+        "year": "2020",
+        "journal": "Science Advances",
+        "title": "Quantum Mechanics"
+    }
+    key = helpers._generate_citation_key(entry)
+    assert key.startswith("Doe2020SAQuantum")
+    # numeric start gives empty key when no alphabetic content is found
+    entry2 = {"author": "1234","year":"","journal":"","title":""}
+    assert helpers._generate_citation_key(entry2) == ""

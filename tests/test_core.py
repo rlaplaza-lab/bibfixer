@@ -4,7 +4,7 @@ import pathlib
 # ensure workspace root is on path so that the bibliography package can be imported
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
-from bibliography.core import walk_fields, _join_multiline_values
+from bibliography.core import walk_fields, _join_multiline_values, field_transform, parse_bib_file, write_bib_file, BibFile
 
 
 class DummyBib:
@@ -51,3 +51,36 @@ def test_join_multiline_values():
     # non-list, non-multiline returns unchanged
     assert _join_multiline_values(42) == 42
     assert _join_multiline_values("single line") == "single line"
+
+
+def test_field_transform_decorator_and_io(tmp_path):
+    sample = """@article{foo,
+  title={hello},
+  year={2020},
+}
+"""
+    path = tmp_path / "foo.bib"
+    path.write_text(sample)
+    bib = BibFile(path)
+
+    @field_transform
+    def shout(value):
+        if isinstance(value, str):
+            return value.upper()
+        return value
+
+    changed = shout(bib)
+    assert changed >= 1
+    assert bib.entries[0]["title"] == "HELLO"
+
+    # test convenience functions
+    entries = parse_bib_file(path)
+    assert isinstance(entries, list) and entries
+
+    # modify database via write_bib_file
+    db = bib.database
+    db.entries[0]["title"] = "WORLD"
+    write_bib_file(path, db)
+    # re-read and verify
+    bib2 = BibFile(path)
+    assert bib2.entries[0]["title"] == "WORLD"
