@@ -1,6 +1,6 @@
 """Top-level imports for the bibfixer package."""
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
 
 from .core import BibFile, parse_bib_file, parse_bibtex_file, write_bib_file
 from . import helpers

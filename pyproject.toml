@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bibfixer"
-version = "0.1.4"
+version = "0.1.5"
 description = "Utility library and CLI for managing LaTeX bibliography files."
 authors = [
     {name = "Your Name", email = "you@example.com"},
@@ -31,6 +31,11 @@ dependencies = [
     # bibfmt is a mandatory formatting helper; install via GitHub as it isn't
     # on PyPI yet.
     "bibfmt @ git+https://github.com/rlaplaza-lab/bibfmt.git",
+    # ISO 4 journal abbreviations used as a fallback when no explicit mapping
+    # is available.  The package is optional at runtime but installing it
+    # allows more realistic abbreviations; imports are guarded so absence
+    # does not break the CLI.
+    "iso4>=0.0.2",
 ]
 
 [project.optional-dependencies]

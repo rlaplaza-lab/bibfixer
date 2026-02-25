@@ -122,6 +122,10 @@ def test_betterbib_suspicious_change_restores(tmp_path, monkeypatch, capsys):
     bib = tmp_path / "test.bib"
     bib.write_text(original)
 
+    # pretend betterbib is installed so the CLI tries to run it
+    import importlib.util
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
+
     # fake subprocess.run to rewrite bib file with bad data
     def fake_run(cmd, capture_output, text, timeout):
         # write bad content to simulate download of wrong entry
@@ -167,6 +171,10 @@ def test_betterbib_negative_return_signal(tmp_path, monkeypatch, capsys):
     # simulate a crash (signal) from the betterbib subprocess
     bib = tmp_path / "test.bib"
     bib.write_text("@article{X, title={T}}\n")
+
+    # emulate betterbib being present
+    import importlib.util
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
 
     def fake_run(cmd, capture_output, text, timeout):
         class R:
@@ -292,7 +300,7 @@ def test_betterbib_skip_malformed_file(tmp_path, capsys):
     assert bib.read_text().startswith("@article")
 
 
-def test_abbreviate_journal_names_heuristic(tmp_path, disable_bibfmt):
+def test_abbreviate_journal_names_heuristic(tmp_path, disable_bibfmt, monkeypatch):
     tex = setup_simple_project(tmp_path)
     bib = tmp_path / "refs.bib"
     # choose a journal not present in the tiny built-in mapping
@@ -303,10 +311,15 @@ def test_abbreviate_journal_names_heuristic(tmp_path, disable_bibfmt):
 """)
     tex.write_text(r"\cite{A}")
 
+    # patch iso4.abbreviate so the test is deterministic and doesn't
+    # require NLTK data.
+    import iso4
+    monkeypatch.setattr(iso4, "abbreviate", lambda j: "S. V. L. J. N." if j == "Some Very Long Journal Name" else j)
+
     curate_bibliography([bib], create_backups=False)
     content = bib.read_text()
-    # journal should be abbreviated by the heuristic (initial letters)
-    assert re.search(r"journal\s*=\s*\{S\.V\.L\.J\.N\.\}", content)
+    # the patched abbreviation should appear
+    assert "S. V. L. J. N." in content
     # the entry itself should still be present (key not important here)
     assert "@article" in content
 
@@ -315,6 +328,10 @@ def test_betterbib_abbreviation_command_invoked(tmp_path, monkeypatch):
     # the new subcommand should be invoked and should modify the file
     bib = tmp_path / "refs.bib"
     bib.write_text("@article{A, journal={Journal of the American Chemical Society}}\n")
+
+    # pretend betterbib is installed so abbreviation step runs
+    import importlib.util
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
 
     calls = []
     class R:
@@ -338,18 +355,44 @@ def test_betterbib_abbreviation_command_invoked(tmp_path, monkeypatch):
     assert re.search(r"journal\s*=\s*\{J\. ?Am\. ?Chem\. ?Soc\.?\}", bib.read_text())
 
 
-def test_heuristic_skip_already_abbreviated():
+def test_heuristic_skip_already_abbreviated(monkeypatch):
     from bibfixer.fixes import _heuristic_abbrev
-    # normal expansion for a long name (uses simple initials heuristic)
-    assert _heuristic_abbrev("Journal of Testing") == "J.o.T."
+    # patch iso4 so we don't trigger the NLTK lookup during tests
+    import iso4
+    monkeypatch.setattr(iso4, "abbreviate", lambda j: "J. Test." if j == "Journal of Testing" else j)
+
+    # iso4 should be called and its result returned
+    assert _heuristic_abbrev("Journal of Testing") == "J. Test."
     # if the journal already contains a period we treat it as done
     assert _heuristic_abbrev("J. Test.") == "J. Test."
+
+
+def test_heuristic_no_iso4(monkeypatch):
+    """If the ``iso4`` package isn’t available or raises an error we leave the
+    journal name unchanged rather than inventing an abbreviation.
+    """
+    from bibfixer.fixes import _heuristic_abbrev
+    import builtins
+
+    # force ``import iso4`` to fail
+    orig_import = builtins.__import__
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "iso4":
+            raise ImportError
+        return orig_import(name, globals, locals, fromlist, level)
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+
+    assert _heuristic_abbrev("Journal of Testing") == "Journal of Testing"
 
 
 def test_betterbib_abbrev_even_if_update_crashes(tmp_path, monkeypatch, capsys):
     # update step fails but abbreviation still executes
     bib = tmp_path / "refs.bib"
     bib.write_text("@article{A, journal={Journal of the American Chemical Society}}\n")
+
+    # ensure abbreviation step is attempted by pretending betterbib exists
+    import importlib.util
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name: object())
 
     calls = []
     class R:

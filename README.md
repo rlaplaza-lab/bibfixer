@@ -20,14 +20,14 @@ via command-line options).  The utility performs the following operations
    appropriate.  The base mapping is now sourced from two CSV files
    shipped with the package (general journals plus an ACS‑specific list);
    callers may still mutate ``bibfixer.fixes.JOURNAL_ABBREVIATIONS`` to
-   add or override entries.  When a title isn’t found in the map a very
-   simple fallback heuristic generates an abbreviation from the initials of
-   the words in the journal name, ensuring that some shortening is
-   performed even if the optional ``betterbib`` helper crashes or is
-   unavailable; the ``journal`` field itself will be changed when a
-   replacement is computed.  Citation keys may additionally be standardised
-   (AuthorYearJournalFirstTitleWord) **only if a `main.tex` file is present**,
-   ensuring corresponding `.tex` updates.
+   add or override entries.  When a title isn’t found in the map we attempt
+   to apply an ISO 4 standard abbreviation via the optional ``iso4``
+   package.  This dependency is imported lazily and any import or runtime
+   errors are ignored – the original title is left unchanged rather than
+   inventing a bogus abbreviation.  The ``journal`` field itself will only
+   be modified when a genuine abbreviation is available.  Citation keys may
+   additionally be standardised (AuthorYearJournalFirstTitleWord) **only if a
+   `main.tex` file is present**, ensuring corresponding `.tex` updates.
 3. Removes unused bibliography entries (those not cited in any `.tex` file).
 4. Detects and consolidates duplicate references, first by DOI and then by
    title (loose matching ignores case, braces and punctuation).
@@ -89,8 +89,10 @@ safeguards (faulthandler enabled, extra error handling) that help when
 well.  **Note**: the upstream repository stores its large ``journals.json``
 file in Git LFS.  `pip install` from GitHub does *not* fetch LFS objects, so
 an install may end up with a tiny pointer file instead of the real data.  In
-those situations the abbreviation subcommand will be skipped with a warning and
-a heuristic is used by bibfixer as a fallback.  The command-line flag
+in those situations the abbreviation subcommand will be skipped with a warning.  Our
+built-in mapping (and, if installed, the optional ``iso4`` package) will still
+be consulted later; if neither produces a valid ISO 4 abbreviation the full
+journal title is left untouched.  The command-line flag
 `--no-betterbib` (or environment variable ``BIBFIXER_NO_BETTERBIB``) can be
 used to disable both the update and abbreviation steps entirely.
 
@@ -102,9 +104,10 @@ When `betterbib` is installed we call it twice during curation:
   (`--extra-abbrev-file`).
 
 If either invocation fails (timeout, crash, non‑zero exit code) the workflow
-prints a warning and continues; our built-in map/heuristic will still run
-later as a fallback, so you always see some abbreviation.  Crash messages
-include the signal number (e.g. "crashed with signal 11").
+prints a warning and continues; our built-in map (and optionally ``iso4``) will
+still run later as a fallback, though it will refrain from inventing a
+spurious abbreviation.  Crash messages include the signal number (e.g.
+"crashed with signal 11").
 
 Install the package normally, which will pull in bibfmt:
 

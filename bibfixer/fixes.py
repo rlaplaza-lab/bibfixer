@@ -323,26 +323,48 @@ def fix_unescaped_percent(bib_file: Path | core.BibFile) -> int:
 
 
 def _heuristic_abbrev(journal: str) -> str:
-    """Generate a crude abbreviation for *journal*.
+    """Try to obtain an ISO 4 abbreviation for *journal*.
 
-    If the title contains two or more words we take the first letter of each
-    non‑empty piece and join them with periods.  This is intentionally
-    simplistic – it is meant as a fallback when no explicit mapping is
-    available (for example if ``betterbib`` crashed during a run).  The
-    heuristic is only applied when the result differs from the original
-    string, which means single-word titles are left untouched.
+    We used to fall back to a very coarse scheme that simply joined the
+    initial letters of each word.  That produced fabricated abbreviations such
+    as ``"J.o.T."`` for "Journal of Testing" which gave a false impression
+    of legitimacy.  Instead we now rely on the third-party ``iso4`` package
+    (installed as an optional dependency) to perform the transformation.  The
+    function behaves as follows::
+
+        * if the journal string already contains a period we assume it has
+          been manually abbreviated and return it unchanged;
+        * single-word titles are left untouched;
+        * if ``iso4`` cannot be imported or raises any exception the original
+          title is returned rather than inventing a bogus abbreviation;
+        * otherwise ``iso4.abbreviate`` is called and its result is used if
+          it differs from the input.
+
+    The publication’s title is only modified when a genuine abbreviation is
+    available; callers may still extend :data:`JOURNAL_ABBREVIATIONS` with
+    custom mappings if desired.
     """
-    # if the string already contains a period we assume it has been
-    # abbreviated (either manually or by ``betterbib``) and leave it alone.
+    # treat anything already containing a period as pre‑abbreviated
     if '.' in journal:
         return journal
+
     words = journal.split()
     if len(words) < 2:
         return journal
-    chars = [w[0] for w in words if w and w[0].isalpha()]
-    if not chars:
+
+    try:
+        import iso4  # optional dependency
+    except ImportError:  # pragma: no cover - behaviour exercised in tests
         return journal
-    return ".".join(chars) + '.'
+
+    try:
+        abbrev = iso4.abbreviate(journal)
+    except Exception:  # pragma: no cover - tested by forcing an error
+        return journal
+
+    if abbrev and abbrev != journal:
+        return abbrev
+    return journal
 
 
 def abbreviate_journal_names(bib_file: Path) -> int:
@@ -350,10 +372,12 @@ def abbreviate_journal_names(bib_file: Path) -> int:
 
     A very small built-in dictionary is used by default; callers may modify
     or extend :data:`JOURNAL_ABBREVIATIONS` to add their own entries.  If a
-    title is not found in the mapping a simple heuristic is used to shorten
-    it by taking the initial letters of each word.  This ensures that users
-    still see *some* abbreviation even when external tools such as
-    ``betterbib`` are unavailable or fail (segfaults, timeouts, etc.).
+    title is not found in the mapping we invoke a helper that attempts to
+    produce an ISO 4 abbreviation via the optional ``iso4`` package.  Missing
+    or failing installations are silently ignored and the original title is
+    preserved rather than producing a contrived result.  This provides a
+    measure of safety when external tools such as ``betterbib`` are
+    unavailable or crash (segfaults, timeouts, etc.).
 
     Only exact matches are looked up in the dictionary and the comparison is
     case-sensitive to avoid accidentally mangling legitimate titles.  The
