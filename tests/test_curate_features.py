@@ -201,6 +201,34 @@ def test_betterbib_skip_malformed_file(tmp_path, capsys):
     assert bib.read_text().startswith("@article")
 
 
+def test_betterbib_journal_data_download(tmp_path, monkeypatch):
+    # missing journals.json should trigger a download and still work
+    import betterbib
+    from betterbib import journal_abbrev
+    from pathlib import Path
+    from pybtex.database import Entry
+
+    data_dir = Path(betterbib.__file__).resolve().parent / "data"
+    json_path = data_dir / "journals.json"
+    if json_path.exists():
+        json_path.unlink()
+
+    class FakeResp:
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            return False
+        def read(self):
+            return b'{"Foo":"bar"}'
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda url: FakeResp())
+
+    d = {"A": Entry("article", {"journal": "Foo"})}
+    journal_abbrev(d)
+    assert json_path.exists()
+    assert d["A"].fields["journal"] == "bar"
+
+
 def test_abbreviate_journal_names_heuristic(tmp_path, disable_bibfmt):
     tex = setup_simple_project(tmp_path)
     bib = tmp_path / "refs.bib"

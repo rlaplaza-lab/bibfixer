@@ -23,4 +23,4 @@ build/
 betterbib_cache.sqlite
 
 # local clone used for development, not part of the distribution
-betterbib-src/
+# betterbib-src/  <-- intentionally kept in repo so we can track patches
