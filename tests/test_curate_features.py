@@ -214,7 +214,6 @@ def test_cli_no_betterbib(tmp_path, monkeypatch, capsys):
     # the command-line option should propagate and skip the external tool
     bib = tmp_path / "refs.bib"
     bib.write_text("@article{A, journal={Some Journal}}\n")
-    tex = setup_simple_project(tmp_path)
 
     calls = []
     class R:
@@ -248,7 +247,6 @@ def test_cli_no_betterbib(tmp_path, monkeypatch, capsys):
 def test_env_var_disables_betterbib(tmp_path, monkeypatch, capsys):
     bib = tmp_path / "refs.bib"
     bib.write_text("@article{A, journal={Some Journal}}\n")
-    tex = setup_simple_project(tmp_path)
 
     calls = []
     class R:

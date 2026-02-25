@@ -92,9 +92,12 @@ def update_with_betterbib(bib_file: Path) -> None:
     # interpreter’s import path is used rather than whatever script might be
     # found on ``PATH``.  This reduces the chance that a stray executable from
     # a source checkout is invoked when the working directory changes.
-    try:
-        import betterbib  # type: ignore[import]
-    except ImportError:
+    # avoid importing the package solely to check for its presence; use
+    # ``importlib.util.find_spec`` which doesn't import the module at all and
+    # therefore doesn't trigger the unused-import lint complaint.
+    import importlib.util
+
+    if importlib.util.find_spec("betterbib") is None:  # pragma: no cover - absence is hard to simulate
         print("  Warning: betterbib not installed, skipping update")
         return
 
@@ -173,9 +176,9 @@ def abbreviate_with_betterbib(bib_file: Path) -> None:
     the latter still runs later as a fallback.
     """
     print("  Abbreviating journal names with betterbib...")
-    try:
-        import betterbib  # type: ignore[import]
-    except ImportError:
+    # see comment above in :func:`update_with_betterbib`.
+    import importlib.util
+    if importlib.util.find_spec("betterbib") is None:  # pragma: no cover - simulating install absence is difficult
         print("  Warning: betterbib not installed, skipping abbreviation")
         return
 
