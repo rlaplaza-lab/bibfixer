@@ -98,7 +98,12 @@ def update_with_betterbib(bib_file: Path) -> None:
         print("  Warning: betterbib not installed, skipping update")
         return
 
-    cmd = [sys.executable, '-m', 'betterbib', 'update', '-i', str(bib_file)]
+    # attempt to invoke the CLI via a module; older/broken installs may not
+    # provide a ``__main__`` which would make ``-m betterbib`` fail.  falling
+    # back to the explicit submodule is safe and works with both.
+    # execute the internal main module directly; cli package lacks a
+    # __main__ so ``-m betterbib.cli`` fails in some installations.
+    cmd = [sys.executable, '-m', 'betterbib.cli._main', 'update', '-i', str(bib_file)]
     try:
         result = subprocess.run(
             cmd,
@@ -174,7 +179,7 @@ def abbreviate_with_betterbib(bib_file: Path) -> None:
         print("  Warning: betterbib not installed, skipping abbreviation")
         return
 
-    cmd = [sys.executable, '-m', 'betterbib', 'abbreviate-journal-names', '-i', str(bib_file)]
+    cmd = [sys.executable, '-m', 'betterbib.cli._main', 'abbreviate-journal-names', '-i', str(bib_file)]
     try:
         result = subprocess.run(
             cmd,
