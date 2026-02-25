@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bibfixer"
-version = "0.1.2"
+version = "0.1.3"
 description = "Utility library and CLI for managing LaTeX bibliography files."
 authors = [
     {name = "Your Name", email = "you@example.com"},
@@ -21,7 +21,13 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "bibtexparser>=1.3",
+    # bibtexparser 2.0 introduced a backward-incompatible restructure of its
+    # package layout; bibfixer’s imports still target the 1.x layout so we
+    # constrain the requirement.  The older bibtexparser also depends on
+    # pyparsing <3, hence we pin that here as well to avoid incompatibilities.
+    # See https://github.com/NScholte/bibtexparser for the new API if we ever
+    # migrate.
+    "bibtexparser>=1.3,<2",
     # bibfmt is a mandatory formatting helper; install via GitHub as it isn't
     # on PyPI yet.
     "bibfmt @ git+https://github.com/rlaplaza-lab/bibfmt.git",
@@ -29,8 +35,15 @@ dependencies = [
 
 [project.optional-dependencies]
 # optional features that require third-party tools not on PyPI or only needed
-# for extended curation workflows
-betterbib = ["betterbib>=0.11"]
+# for extended curation workflows.  ``betterbib`` is fetched directly from the
+# upstream GitHub repository rather than PyPI so that fixes (including
+# local patches applied during development) can be pulled in more quickly.
+# The URL points at the canonical source; users can override it by
+# installing manually from a fork or a local copy if desired.
+betterbib = [
+    # PEP 508 direct URL syntax: <name> @ <url>
+    "betterbib @ git+https://github.com/rlaplaza/betterbib.git@main",
+]
 pybtex = ["pybtex>=0.24"]
 
 # development/test tools
@@ -52,6 +65,7 @@ include-package-data = true
 # for a package inside that directory and found nothing.  using an empty
 # where ensures the top-level package directory is on sys.path.
 where = [""]
+exclude = ["betterbib-src*"]
 
 [tool.setuptools.package-data]
 "bibfixer" = ["data/*.csv"]

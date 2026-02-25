@@ -11,6 +11,27 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
+# bibtexparser (1.x) relies on pyparsing, which has undergone an API change in
+# version 3.0; names such as ``DelimitedList`` and ``add_parse_action`` were
+# renamed.  Rather than pinning to an old pyparsing release we apply a small
+# compatibility shim so that the library can work with both old and new
+# versions of pyparsing without modification.  This avoids forcing users to
+# downgrade pyparsing and conflict with other packages in their environment.
+try:
+    import pyparsing as _pp  # type: ignore[import]
+    if not hasattr(_pp, "DelimitedList") and hasattr(_pp, "delimitedList"):
+        # mypy doesn't know about the dynamic attribute; it's safe at runtime
+        _pp.DelimitedList = _pp.delimitedList  # type: ignore[attr-defined,misc]
+
+    # ``add_parse_action`` was renamed to ``addParseAction``; ensure both exist
+    for _cls in (_pp.ParserElement, getattr(_pp, "Word", None), getattr(_pp, "Regex", None), getattr(_pp, "WordRegex", None)):
+        if _cls is not None and hasattr(_cls, "addParseAction") and not hasattr(_cls, "add_parse_action"):
+            # the stub for ParserElement doesn't define these attributes, so
+            # ignore type checking here as well
+            _cls.add_parse_action = _cls.addParseAction  # type: ignore[attr-defined,assignment]
+except ImportError:
+    pass
+
 import bibtexparser  # type: ignore[import]
 from bibtexparser.bparser import BibTexParser  # type: ignore[import]
 from bibtexparser.bwriter import BibTexWriter  # type: ignore[import]

@@ -60,6 +60,18 @@ def update_with_betterbib(bib_file: Path) -> None:
     """
     print("  Updating entries with betterbib...")
 
+    # ensure the file actually contains valid entries before invoking
+    # betterbib.  ``pybtex``/``bibtexparser`` used to raise an exception for a
+    # malformed file, but with recent dependency upgrades it will silently
+    # return an empty database instead.  We check the raw text for an entry
+    # marker and then make sure the parsed result isn’t empty; if it is we
+    # assume the file is hopeless and skip the helper.
+    text = bib_file.read_text(encoding="utf-8", errors="ignore")
+    parsed = core.parse_bibtex_file(bib_file)
+    if "@" in text and (not parsed or not getattr(parsed, "entries", [])):
+        print("  Warning: input file looks unparsable, skipping betterbib update")
+        return
+
     backup_path = bib_file.with_suffix('.bib.betterbib_backup')
     shutil.copy2(bib_file, backup_path)
 

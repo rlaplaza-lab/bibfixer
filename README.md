@@ -70,8 +70,23 @@ pytest
 The core library requires both `bibtexparser` and the formatting tool
 `bibfmt` (installed from GitHub, since it isn’t yet on PyPI).  Curation
 routines use `bibfmt` by default to normalise and drop non-standard fields.
-Other helpers such as `betterbib` or `pybtex` remain optional extras; when
-`betterbib` is installed we call it twice during curation:
+Other helpers such as `betterbib` or `pybtex` remain optional extras; we
+recommend installing `betterbib` from the upstream GitHub repository rather
+than PyPI, as discussed in :file:`pyproject.toml`, since this project tracks
+that source more closely and allows local patches during development.  During
+active development you can clone the repo alongside this project and install
+it in editable mode:
+
+```sh
+cd /path/to/bibfixer
+git clone https://github.com/rlaplaza/betterbib betterbib-src
+pip install -e betterbib-src  # or using poetry/poetry in-project path
+```
+
+The copy under ``betterbib-src`` in the workspace already contains a few
+safeguards (faulthandler enabled, extra error handling) that help when
+`betterbib` misbehaves; updating that directory will pull in upstream fixes as
+well.  When `betterbib` is installed we call it twice during curation:
 
 * `betterbib update` to pull updated metadata (DOIs, titles, etc.)
 * `betterbib abbreviate-journal-names -i` to apply the tool's internal

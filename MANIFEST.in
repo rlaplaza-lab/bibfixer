@@ -1,0 +1,2 @@
+# Exclude local betterbib clone from distributions
+prune betterbib-src

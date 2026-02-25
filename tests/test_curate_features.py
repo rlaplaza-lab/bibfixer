@@ -185,6 +185,22 @@ def test_betterbib_negative_return_signal(tmp_path, monkeypatch, capsys):
     assert bib.read_text().startswith("@article{X")
 
 
+def test_betterbib_skip_malformed_file(tmp_path, capsys):
+    # if the bib file cannot be parsed we never invoke external betterbib
+    bib = tmp_path / "bad.bib"
+    # missing equals sign in field will trigger a pybtex TokenRequired error
+    bib.write_text("@article{A title={MissingEquals}}\n")
+
+    from bibfixer.cli import update_with_betterbib
+    update_with_betterbib(bib)
+
+    captured = capsys.readouterr()
+    assert "looks unparsable" in captured.out.lower()
+    assert "skipping betterbib update" in captured.out.lower()
+    # file should be left untouched (no backup removed either)
+    assert bib.read_text().startswith("@article")
+
+
 def test_abbreviate_journal_names_heuristic(tmp_path, disable_bibfmt):
     tex = setup_simple_project(tmp_path)
     bib = tmp_path / "refs.bib"
