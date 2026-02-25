@@ -5,7 +5,15 @@ import pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 
 from bibliography import cli
+from bibliography import curate
 from bibliography.core import BibFile
+
+
+def test_cli_aliases():
+    # ensure curation helpers are re-exported from the CLI module
+    assert cli.find_duplicates is curate.find_duplicates
+    assert cli.choose_best_entry is curate.choose_best_entry
+    assert cli.consolidate_duplicate_titles is curate.consolidate_duplicate_titles
 
 
 def test_choose_best_entry_simple():
