@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bibfixer"
-version = "0.1.1"
+version = "0.1.2"
 description = "Utility library and CLI for managing LaTeX bibliography files."
 authors = [
     {name = "Your Name", email = "you@example.com"},
@@ -44,7 +44,14 @@ bibfixer = "bibfixer.cli:main"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-where = ["bibfixer"]
+# search from the project root so the editable install adds the root
+# directory to sys.path.  previously we limited discovery to
+# "bibfixer", which caused pip to write a path ending in
+# ``.../bibfixer/bibfixer``.  when running the CLI outside the
+# checkout this meant ``import bibfixer`` failed because Python looked
+# for a package inside that directory and found nothing.  using an empty
+# where ensures the top-level package directory is on sys.path.
+where = [""]
 
 [tool.setuptools.package-data]
 "bibfixer" = ["data/*.csv"]

@@ -92,9 +92,15 @@ def update_with_betterbib(bib_file: Path) -> None:
 
     if result.returncode != 0:
         # prefer stderr, but fall back to stdout or return code if nothing
-        # was emitted.  Prior behaviour printed an empty message which was
-        # very confusing during large runs.
-        msg = result.stderr.strip() or result.stdout.strip() or f"return code {result.returncode}"
+        # was emitted.  A negative return code means the process was killed
+        # by a signal (segfaults in particular show up as -11).  Include a
+        # more descriptive message in that case so the user can tell what
+        # went wrong.
+        if result.returncode < 0:
+            sig = -result.returncode
+            msg = f"crashed with signal {sig}"
+        else:
+            msg = result.stderr.strip() or result.stdout.strip() or f"return code {result.returncode}"
         print(f"  Warning: betterbib update had issues: {msg}")
         shutil.copy2(backup_path, bib_file)
         return
@@ -123,6 +129,44 @@ def update_with_betterbib(bib_file: Path) -> None:
     # some entries get commented-out; let the shared helper deal with it
     # once betterbib may comment entries; the shared fix handles it
     uncomment_bibtex_entries(bib_file)
+
+
+def abbreviate_with_betterbib(bib_file: Path) -> None:
+    """Invoke ``betterbib abbreviate-journal-names`` on *bib_file*.
+
+    This helper is deliberately lightweight compared to
+    :func:`update_with_betterbib` – we don't create an extra backup since a
+    full backup was already created by :func:`process_bib_file` and the
+    operation is generally idempotent.  The routine prints warnings if the
+    external command fails, but never raises an exception.  Abbreviations
+    provided by the tool are preferred over the built-in map/heuristic;
+    the latter still runs later as a fallback.
+    """
+    print("  Abbreviating journal names with betterbib...")
+    try:
+        result = subprocess.run(
+            ['betterbib', 'abbreviate-journal-names', '-i', str(bib_file)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except subprocess.TimeoutExpired:
+        print("  Warning: betterbib abbreviation timed out")
+        return
+    except Exception as exc:  # pragma: no cover - very rare
+        print(f"  Warning: betterbib abbreviation failed: {exc}")
+        return
+
+    if result.returncode != 0:
+        if result.returncode < 0:
+            sig = -result.returncode
+            msg = f"crashed with signal {sig}"
+        else:
+            msg = result.stderr.strip() or result.stdout.strip() or f"return code {result.returncode}"
+        print(f"  Warning: betterbib abbreviation had issues: {msg}")
+        return
+
+    print("  betterbib journal abbreviation completed")
 
 
 def format_with_bibfmt(bib_file: Path) -> None:
@@ -364,6 +408,10 @@ def process_bib_file(bib_file: Path, create_backups: bool = True) -> None:
     if create_backups:
         create_backup(bib_file)
     update_with_betterbib(bib_file)
+    # run the journal-abbreviation subcommand regardless of the update
+    # outcome so that we aren't reliant on the optional mapping or on
+    # betterbib surviving the initial metadata sync.
+    abbreviate_with_betterbib(bib_file)
     print("  Fixing invalid UTF-8 byte sequences...")
     _apply_basic_fixes(bib_file)
     format_with_bibfmt(bib_file)
