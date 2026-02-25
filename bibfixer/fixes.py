@@ -234,10 +234,17 @@ def fix_html_entities(bib_file: Path) -> int:
     return fixed_count
 
 
-def fix_unescaped_percent(bib_file: Path) -> int:
+def fix_unescaped_percent(bib_file: Path | core.BibFile) -> int:
     """Escape literal ``%`` characters in every field of a :class:`BibFile`.
 
-    A decorator from :mod:`core` is used to apply the transformation.
+    The helper accepts either a ``Path`` or an already-instantiated
+    :class:`BibFile` (the CLI tests rely on the latter).  A decorator from
+    :mod:`core` is used to perform the actual field-wise transformation.
+
+    The implementation uses ``core.BibFile`` explicitly when converting the
+    argument; this avoids ``NameError`` issues in environments where the
+    top-level ``BibFile`` symbol may be missing (see issue reported by user
+    during stress testing).
     """
     @core.field_transform
     def _escape(value: Any) -> Any:
@@ -262,9 +269,15 @@ def fix_unescaped_percent(bib_file: Path) -> int:
             else:
                 pos += 1
         return new_value if changed else value
-    changed = _escape(bib_file)
+    # convert the argument to a BibFile if necessary (tests pass one in)
+    if isinstance(bib_file, core.BibFile):
+        bf = bib_file
+    else:
+        bf = core.BibFile(bib_file)
+
+    changed = _escape(bf)
     if changed:
-        bib_file.write()
+        bf.write()
     return changed
 
 

@@ -19,7 +19,6 @@ from pathlib import Path
 from typing import Iterable, Any
 
 from . import core, utils, helpers
-from .core import BibFile
 from .core import FIELDS_TO_REMOVE
 
 # import frequently used fix routines at module level for simplicity
@@ -192,7 +191,8 @@ def choose_best_entry(entries: list[tuple[Path, dict]]) -> dict:
     """
     def score(entry: dict) -> float:
         important = ['title', 'author', 'year', 'journal', 'doi', 'pages', 'volume']
-        s = sum(1 for f in important if entry.get(f))
+        # start with a float so that later additions preserve a float type
+        s: float = sum(1 for f in important if entry.get(f))
         s += 0.1 * len(entry)
         return s
 
@@ -312,8 +312,9 @@ def _apply_basic_fixes(bib_file: Path) -> None:
     fix_malformed_author_fields(bib_file)
     remove_accents_from_names(bib_file)
     fix_problematic_unicode(bib_file)
-    bf = BibFile(bib_file)
-    fix_unescaped_percent(bf)
+    # we previously wrapped the Path in a BibFile here; the fix
+    # function now expects a Path directly.
+    fix_unescaped_percent(bib_file)
     # legacy date fixes run at end
     fix_legacy_year_fields(bib_file)
     fix_legacy_month_fields(bib_file)
@@ -360,6 +361,8 @@ def consolidate_duplicate_titles(bib_files: Iterable[Path]) -> dict[str, str]:
         print(f"  Title '{norm}' -> keeping {best_key}")
         for bib, ent in entries:
             old = utils.normalize_unicode(ent.get('ID', ''))
+            if not old:
+                continue
             if old != best_key:
                 keymap[old] = best_key
         for bib, ent in entries:
@@ -433,7 +436,9 @@ def remove_unused_entries(bib_files: Iterable[Path]) -> int:
         for entry in db.entries:
             cr = entry.get('crossref') or entry.get('Crossref')
             if cr:
-                cross.add(utils.normalize_unicode(cr))
+                norm = utils.normalize_unicode(cr)
+                if norm:
+                    cross.add(norm)
     cited |= cross
     removed = 0
     for bib in bib_files:
