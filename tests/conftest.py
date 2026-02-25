@@ -13,3 +13,17 @@ import pathlib
 
 # add workspace root to path for test imports
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+
+import pytest
+
+
+@pytest.fixture
+def disable_bibfmt(monkeypatch):
+    """Patch subprocess.run so that external bibfmt calls are no-ops.
+
+    Tests which exercise formatting logic can override this if they need to
+    simulate actual bibfmt behaviour; otherwise it avoids invoking an external
+    command during the curation workflow.
+    """
+    monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: type("R", (), {"returncode": 0, "stderr": ""})())
+    return monkeypatch

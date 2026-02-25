@@ -6,21 +6,23 @@ from contextlib import redirect_stdout
 from bibfixer.cli import curate_bibliography
 
 
-def setup_simple_project(tmp_path):
-    """Helper to create a minimal project and chdir into it."""
-    # create empty tex file if not already
+def setup_simple_project(tmp_path, create_main: bool = True):
+    """Create a minimal project directory and ``chdir`` into it.
+
+    If *create_main* is ``False`` the ``main.tex`` file is not written, which
+    allows tests to verify behaviour when the conventional file is missing.
+    The function returns the path to ``main.tex`` (which may not exist).
+    """
     tex = tmp_path / "main.tex"
-    tex.write_text("")
+    if create_main:
+        tex.write_text("")
     # change working directory so helpers find files
     import os
     os.chdir(tmp_path)
     return tex
 
 
-def test_remove_unused_entries(tmp_path, monkeypatch):
-    # patch bibfmt invocation since it's run during curation
-    monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: type("R", (), {"returncode": 0, "stderr": ""})())
-
+def test_remove_unused_entries(tmp_path, disable_bibfmt):
     tex = setup_simple_project(tmp_path)
     bib = tmp_path / "refs.bib"
     bib.write_text("""@article{A,
@@ -40,9 +42,7 @@ def test_remove_unused_entries(tmp_path, monkeypatch):
     assert "Used" in content
 
 
-def test_standardize_keys(tmp_path, monkeypatch):
-    monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: type("R", (), {"returncode": 0, "stderr": ""})())
-
+def test_standardize_keys(tmp_path, disable_bibfmt):
     tex = setup_simple_project(tmp_path)
     bib = tmp_path / "refs.bib"
     bib.write_text("""@article{oldkey,
@@ -65,9 +65,7 @@ def test_standardize_keys(tmp_path, monkeypatch):
     assert re.search(r"cite\{" + re.escape(newkey) + r"\}", tex.read_text())
 
 
-def test_standardize_skipped_without_main(tmp_path, monkeypatch):
-    monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: type("R", (), {"returncode": 0, "stderr": ""})())
-
+def test_standardize_skipped_without_main(tmp_path, disable_bibfmt):
     # no main.tex created by setup
     bib = tmp_path / "refs.bib"
     bib.write_text("""@article{oldkey,
@@ -130,9 +128,7 @@ def test_betterbib_suspicious_change_restores(tmp_path, monkeypatch, capsys):
     assert bib.read_text() == original
 
 
-def test_duplicate_title_consolidation(tmp_path, monkeypatch):
-    monkeypatch.setattr("subprocess.run", lambda *args, **kwargs: type("R", (), {"returncode": 0, "stderr": ""})())
-
+def test_duplicate_title_consolidation(tmp_path, disable_bibfmt):
     tex = setup_simple_project(tmp_path)
     bib1 = tmp_path / "one.bib"
     bib2 = tmp_path / "two.bib"
