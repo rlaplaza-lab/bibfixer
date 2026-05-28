@@ -628,6 +628,11 @@ def remove_unused_entries(bib_files: Iterable[Path]) -> int:
     cited = set()
     for tex in tex_files:
         cited.update(helpers.extract_citations_from_tex(tex))
+    cited_keys = {
+        normalized
+        for key in cited
+        if (normalized := utils.normalize_citation_key(key))
+    }
     cross = set()
     for bib in bib_files:
         db = core.parse_bibtex_file(bib)
@@ -636,16 +641,20 @@ def remove_unused_entries(bib_files: Iterable[Path]) -> int:
         for entry in db.entries:
             cr = entry.get('crossref') or entry.get('Crossref')
             if cr:
-                norm = utils.normalize_unicode(cr)
+                norm = utils.normalize_citation_key(cr)
                 if norm:
                     cross.add(norm)
-    cited |= cross
+    cited_keys |= cross
     removed = 0
     for bib in bib_files:
         db = core.parse_bibtex_file(bib)
         if not db:
             continue
-        to_drop = [i for i,e in enumerate(db.entries) if utils.normalize_unicode(e.get('ID','')) not in cited]
+        to_drop = [
+            i
+            for i, e in enumerate(db.entries)
+            if utils.normalize_citation_key(e.get('ID', '')) not in cited_keys
+        ]
         for idx in reversed(to_drop):
             del db.entries[idx]
             removed += 1

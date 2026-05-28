@@ -71,6 +71,16 @@ def test_update_tex_deduplicates(tmp_path):
     assert content.strip().endswith("cite{K, Z}.")
 
 
+def test_update_tex_citations_matches_mapping_case_insensitively(tmp_path):
+    tex = tmp_path / "foo.tex"
+    tex.write_text(r"This cites \cite{Peter2016}.")
+    mapping = {"peter2016": "Smith2017"}
+
+    helpers.update_tex_citations([tex], mapping)
+
+    assert "cite{Smith2017}" in tex.read_text()
+
+
 def test_sanitize_citation_keys(tmp_path):
     bib = tmp_path / "test.bib"
     bib.write_text("""@article{Bad!Key,

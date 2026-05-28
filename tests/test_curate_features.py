@@ -51,6 +51,25 @@ def test_remove_unused_entries(tmp_path, disable_formatting):
     assert "Used" in content
 
 
+def test_remove_unused_entries_handles_citation_key_case(tmp_path, disable_formatting):
+    tex = setup_simple_project(tmp_path)
+    bib = tmp_path / "refs.bib"
+    bib.write_text("""@article{Peter2016,
+  title={Used despite case difference},
+}
+
+@article{Other2017,
+  title={Unused},
+}
+""")
+    tex.write_text(r"This is a citation \cite{peter2016}")
+
+    curate_bibliography([bib], create_backups=False)
+    content = bib.read_text()
+    assert "Used despite case difference" in content
+    assert "Other2017" not in content
+
+
 def test_standardize_keys(tmp_path, disable_formatting):
     tex = setup_simple_project(tmp_path)
     bib = tmp_path / "refs.bib"

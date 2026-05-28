@@ -17,6 +17,17 @@ def normalize_unicode(text: Optional[str]) -> Optional[str]:
     return unicodedata.normalize("NFC", str(text))
 
 
+def normalize_citation_key(key: Optional[str]) -> Optional[str]:
+    """Normalize citation keys for case-insensitive matching."""
+    normalized = normalize_unicode(key)
+    if not normalized:
+        return None
+    compact = normalized.strip()
+    if not compact:
+        return None
+    return compact.casefold()
+
+
 def normalize_doi(doi: Optional[str]) -> Optional[str]:
     """Normalize DOI strings to a canonical lowercase form without prefix."""
     if not doi:

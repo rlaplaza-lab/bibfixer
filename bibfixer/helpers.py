@@ -101,7 +101,7 @@ def extract_citations_from_tex(tex_file: Path) -> Set[str]:
 
     The implementation is intentionally simple; it looks for a handful of
     common ``\cite`` commands and splits comma-separated lists.  The returned
-    keys are normalised with :func:`utils.normalize_unicode`.
+    keys are normalized with :func:`utils.normalize_unicode`.
     """
     try:
         with open(tex_file, 'r', encoding='utf-8') as f:
@@ -122,7 +122,7 @@ def extract_citations_from_tex(tex_file: Path) -> Set[str]:
     for k in citations:
         nk = utils.normalize_unicode(k)
         if nk:
-            normalized.add(nk)
+            normalized.add(nk.strip())
     return normalized
 
 
@@ -135,6 +135,11 @@ def update_tex_citations(tex_files: Iterable[Path],
     """
     if not key_mapping:
         return 0
+    normalized_mapping = {
+        normalized: value
+        for key, value in key_mapping.items()
+        if (normalized := utils.normalize_citation_key(key))
+    }
 
     updated_files = 0
     for tex_file in tex_files:
@@ -152,9 +157,9 @@ def update_tex_citations(tex_files: Iterable[Path],
             keys = [k.strip() for k in keys_str.split(',')]
             updated_keys = []
             for key in keys:
-                norm = utils.normalize_unicode(key)
-                if norm in key_mapping:
-                    updated_keys.append(key_mapping[norm])
+                norm = utils.normalize_citation_key(key)
+                if norm in normalized_mapping:
+                    updated_keys.append(normalized_mapping[norm])
                 else:
                     updated_keys.append(key)
             # remove duplicates while preserving order
@@ -201,6 +206,7 @@ def sanitize_citation_keys(bib_file: Path, logger: RunLogger | None = None) -> D
         original_key = utils.normalize_unicode(orig)
         if not original_key:
             continue
+        original_key = original_key.strip()
         sanitized_key = re.sub(r"[^A-Za-z0-9_:\-]+", "", original_key)
         if sanitized_key and sanitized_key != original_key:
             entry['ID'] = sanitized_key
@@ -263,6 +269,7 @@ def standardize_citation_keys(bib_file: Path, logger: RunLogger | None = None) -
         norm = utils.normalize_unicode(orig)
         if not norm:
             continue
+        norm = norm.strip()
         new_key = _generate_citation_key(entry)
         if not new_key or new_key == norm:
             used_keys.add(norm)

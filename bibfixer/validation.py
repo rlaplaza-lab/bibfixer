@@ -37,14 +37,14 @@ def validate_citations(logger: RunLogger | None = None) -> List[str]:
         if bib.name.endswith('.backup'):
             continue
         for entry in core.parse_bib_file(bib):
-            k = utils.normalize_unicode(entry.get('ID', ''))
+            k = utils.normalize_citation_key(entry.get('ID', ''))
             if k:
                 all_bib_entries.add(k)
                 cr = entry.get('crossref') or entry.get('Crossref', '')
                 # normalize_unicode may return None; only record if we got a
                 # real string so the dict stays typed correctly.
                 if cr:
-                    norm_cr = utils.normalize_unicode(cr)
+                    norm_cr = utils.normalize_citation_key(cr)
                     if norm_cr:
                         crossrefs[k] = norm_cr
         try:
@@ -52,7 +52,9 @@ def validate_citations(logger: RunLogger | None = None) -> List[str]:
         except Exception:
             content = ''
         for match in re.finditer(r'@comment\s*\{@\w+\{([^,}]+)', content):
-            commented_entries.add(utils.normalize_unicode(match.group(1).strip()))
+            normalized = utils.normalize_citation_key(match.group(1).strip())
+            if normalized:
+                commented_entries.add(normalized)
 
     missing_keys: set[str] = set()
     commented_keys: set[str] = set()
@@ -66,9 +68,21 @@ def validate_citations(logger: RunLogger | None = None) -> List[str]:
             all_issues.append(f"{tex.name}: no bib file")
             continue
         citations = helpers.extract_citations_from_tex(tex)
-        total_citations += len(citations)
-        missing = citations - all_bib_entries
-        commented = [c for c in citations if utils.normalize_unicode(c) in commented_entries]
+        citations_by_normalized = {
+            normalized: citation
+            for citation in citations
+            if (normalized := utils.normalize_citation_key(citation))
+        }
+        normalized_citations = set(citations_by_normalized.keys())
+
+        total_citations += len(normalized_citations)
+        missing_normalized = normalized_citations - all_bib_entries
+        missing = {citations_by_normalized[k] for k in missing_normalized}
+        commented = [
+            citations_by_normalized[c]
+            for c in normalized_citations
+            if c in commented_entries
+        ]
         if missing:
             missing_keys.update(missing)
             all_issues.extend(f"{tex.name}: missing {k}" for k in sorted(missing))
@@ -78,7 +92,7 @@ def validate_citations(logger: RunLogger | None = None) -> List[str]:
         # count each citation that was not missing or commented.  This
         # gives a more accurate "valid" total rather than penalising an
         # entire file because a single citation failed.
-        total_valid += len(citations) - len(missing) - len(commented)
+        total_valid += len(normalized_citations) - len(missing) - len(commented)
 
     # crossref check
 
@@ -175,7 +189,7 @@ def check_duplicate_keys() -> bool:
     keys: dict[str, list] = defaultdict(list)
     for bib in bibs:
         for entry in core.parse_bib_file(bib):
-            k = utils.normalize_unicode(entry.get('ID', ''))
+            k = utils.normalize_citation_key(entry.get('ID', ''))
             if k:
                 keys[k].append(str(bib))
     dup = {k: v for k, v in keys.items() if len(v) > 1}
@@ -188,7 +202,7 @@ def check_duplicate_dois() -> int:
     for bib in bibs:
         bf = BibFile(bib)
         for entry in bf.entries:
-            k = utils.normalize_unicode(entry.get('ID', ''))
+            k = utils.normalize_citation_key(entry.get('ID', ''))
             norm = utils.normalize_doi(entry.get('doi') or entry.get('DOI') or entry.get('Doi'))
             if norm:
                 # ``EntryMeta`` requires a non‑None key; falling back to empty
@@ -255,7 +269,7 @@ def generate_summary():
     all_citations = set()
     for bib in bib_files:
         for entry in core.parse_bib_file(bib):
-            k = utils.normalize_unicode(entry.get('ID', ''))
+            k = utils.normalize_citation_key(entry.get('ID', ''))
             if k:
                 all_keys.add(k)
     for tex in tex_files:
