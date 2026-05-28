@@ -67,6 +67,9 @@ def test_validate_bibliography_and_citations(tmp_path, monkeypatch):
     bib = tmp_path / "main.bib"
     bib.write_text("""@article{A,
   title={T},
+  author={Doe, Jane},
+  journal={J. Test.},
+  year={2024},
 }
 """)
     monkeypatch.chdir(tmp_path)
@@ -93,3 +96,45 @@ def test_validate_citations_prints_details(tmp_path, monkeypatch, capsys):
     assert "Summary: 2/3 citations valid" in out
     assert "Missing citation keys" in out
     assert "C" in out
+
+
+def test_required_fields_validation_reports_missing(tmp_path, monkeypatch):
+    tex = tmp_path / "main.tex"
+    tex.write_text(r"\cite{A}")
+    bib = tmp_path / "main.bib"
+    bib.write_text(
+        """@article{A,
+  title={Only Title},
+  doi={10.1000/test},
+}
+"""
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("bibfixer.validation.check_bibtex_syntax", lambda: True)
+
+    issues = validation.check_required_fields_by_entry_type()
+    assert any("missing required field author" in issue for issue in issues)
+    assert any("missing required field journal" in issue for issue in issues)
+    assert any("missing required field year" in issue for issue in issues)
+    assert not validation.validate_bibliography()
+
+
+def test_required_fields_validation_accepts_alternative_group(tmp_path, monkeypatch):
+    tex = tmp_path / "main.tex"
+    tex.write_text(r"\cite{Book1}")
+    bib = tmp_path / "main.bib"
+    bib.write_text(
+        """@book{Book1,
+  editor={Doe, Jane},
+  title={Collected Works},
+  publisher={Pub House},
+  year={2023},
+}
+"""
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr("bibfixer.validation.check_bibtex_syntax", lambda: True)
+
+    issues = validation.check_required_fields_by_entry_type()
+    assert issues == []
+    assert validation.validate_bibliography()

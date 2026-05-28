@@ -16,6 +16,58 @@ from . import core, utils, helpers
 from .core import BibFile
 from .runlog import RunLogger
 
+_REQUIRED_FIELDS_BY_ENTRYTYPE: dict[str, tuple[tuple[str, ...], ...]] = {
+    "article": (("author",), ("title",), ("journal",), ("year",)),
+    "book": (("author", "editor"), ("title",), ("publisher",), ("year",)),
+    "booklet": (("title",),),
+    "inbook": (("author", "editor"), ("title",), ("chapter", "pages"), ("publisher",), ("year",)),
+    "incollection": (("author",), ("title",), ("booktitle",), ("publisher",), ("year",)),
+    "inproceedings": (("author",), ("title",), ("booktitle",), ("year",)),
+    "conference": (("author",), ("title",), ("booktitle",), ("year",)),
+    "manual": (("title",),),
+    "mastersthesis": (("author",), ("title",), ("school",), ("year",)),
+    "phdthesis": (("author",), ("title",), ("school",), ("year",)),
+    "proceedings": (("title",), ("year",)),
+    "techreport": (("author",), ("title",), ("institution",), ("year",)),
+    "unpublished": (("author",), ("title",), ("note",)),
+}
+
+
+def _has_nonempty_field(entry: dict, field: str) -> bool:
+    value = entry.get(field)
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip())
+    return True
+
+
+def check_required_fields_by_entry_type() -> list[str]:
+    """Return validation issues for missing BibTeX required fields."""
+    issues: list[str] = []
+    for bib in helpers.collect_all_bib_files():
+        for entry in core.parse_bib_file(bib):
+            entry_type = str(entry.get("ENTRYTYPE", "")).strip().lower()
+            if not entry_type:
+                continue
+            required_groups = _REQUIRED_FIELDS_BY_ENTRYTYPE.get(entry_type)
+            if not required_groups:
+                continue
+            key = entry.get("ID", "<missing-key>")
+            for group in required_groups:
+                if any(_has_nonempty_field(entry, field) for field in group):
+                    continue
+                if len(group) == 1:
+                    issues.append(
+                        f"{bib.name}: entry {key} ({entry_type}) missing required field {group[0]}"
+                    )
+                else:
+                    required_any = "/".join(group)
+                    issues.append(
+                        f"{bib.name}: entry {key} ({entry_type}) missing required field one of {required_any}"
+                    )
+    return issues
+
 
 def validate_citations(logger: RunLogger | None = None) -> List[str]:
     r"""Ensure that every \cite command has a corresponding bib entry.
@@ -289,6 +341,7 @@ def validate_bibliography(logger: RunLogger | None = None) -> bool:
     author_count = check_malformed_author_fields()
     percent_count = check_unescaped_percent()
     correspondence = check_file_correspondence()
+    required_field_issues = check_required_fields_by_entry_type()
     generate_summary()
 
     if logger:
@@ -320,9 +373,17 @@ def validate_bibliography(logger: RunLogger | None = None) -> bool:
             logger.step_warn("file_correspondence", "Some .tex files have no matching .bib")
         else:
             logger.step_ok("file_correspondence", "All .tex files have matching .bib files")
-        logger.counter("validation_issues", len(citation_issues) + doi_count + title_count + author_count + percent_count + int(duplicate_keys) + int(not syntax_ok) + int(not correspondence))
+        if required_field_issues:
+            logger.step_warn("required_fields", f"{len(required_field_issues)} missing required field issue(s)")
+        else:
+            logger.step_ok("required_fields", "All entries satisfy required BibTeX fields")
+        logger.counter("validation_issues", len(citation_issues) + doi_count + title_count + author_count + percent_count + int(duplicate_keys) + int(not syntax_ok) + int(not correspondence) + len(required_field_issues))
 
-    return not (citation_issues or duplicate_keys or doi_count or title_count or author_count or percent_count or not syntax_ok or not correspondence)
+    if required_field_issues:
+        for issue in required_field_issues:
+            print(issue)
+
+    return not (citation_issues or duplicate_keys or doi_count or title_count or author_count or percent_count or not syntax_ok or not correspondence or required_field_issues)
 
 
 def check_bibtex_syntax() -> bool:

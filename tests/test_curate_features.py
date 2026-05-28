@@ -7,6 +7,7 @@ from contextlib import redirect_stdout
 
 import iso4
 
+from bibfixer._internal import metadata as internal_metadata
 from bibfixer.cli import (
     curate_bibliography,
     main,
@@ -394,7 +395,7 @@ def test_update_falls_back_to_doi_to_bibtex_for_stubs(tmp_path, monkeypatch, cap
 
     captured = capsys.readouterr()
     out = bib.read_text()
-    assert "Filled 1 DOI stub entry" in captured.out
+    assert "Metadata update completed" in captured.out
     assert "Nanometre-scale thermometry in a living cell" in out
     assert "@article{StubKey" in out
 
@@ -464,10 +465,79 @@ def test_update_enriches_partial_entries_missing_pages(tmp_path, monkeypatch, ca
 
     captured = capsys.readouterr()
     out = bib.read_text()
-    assert "Enriched 1 DOI entry with missing fields" in captured.out
+    assert "Metadata update completed" in captured.out
     assert "pages = {54--58}" in out
-    # Existing non-missing fields should be preserved.
-    assert "title = {Already Here}" in out
+    # Crossref data is now authoritative for DOI-backed entries.
+    assert "title = {Fetched Title}" in out
+
+
+def test_doi_to_bibtex_fetches_crossref_response(monkeypatch):
+    class FakeResponse:
+        def __init__(self, body: str):
+            self._body = body.encode("utf-8")
+
+        def read(self):
+            return self._body
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    seen = {}
+
+    def fake_urlopen(req, timeout):
+        seen["url"] = req.full_url
+        seen["accept"] = req.headers.get("Accept")
+        seen["timeout"] = timeout
+        return FakeResponse("@article{A, title={Fetched}}\n")
+
+    monkeypatch.setattr("bibfixer._internal.metadata.urlrequest.urlopen", fake_urlopen)
+
+    out = internal_metadata.doi_to_bibtex("https://doi.org/10.1038/nature12373")
+    assert out is not None
+    assert "@article{A" in out
+    assert seen["url"].endswith("/10.1038/nature12373")
+    assert "application/x-bibtex" in str(seen["accept"])
+    assert seen["timeout"] > 0
+
+
+def test_update_entries_regenerates_and_warns_on_mismatch(tmp_path, monkeypatch, capsys):
+    bib = tmp_path / "refs.bib"
+    bib.write_text(
+        """@article{StableKey,
+  title={Old Title},
+  author={Old, Author},
+  year={2020},
+  journal={Old Journal},
+  doi={10.1038/nature12373},
+}
+"""
+    )
+
+    def fake_doi_to_bibtex(doi):
+        if doi == "10.1038/nature12373":
+            return """@article{CrossrefKey,
+  title={New Title},
+  author={New, Author},
+  year={2020},
+  journal={Nature},
+  doi={10.1038/nature12373},
+}
+"""
+        return None
+
+    monkeypatch.setattr("bibfixer._internal.metadata.doi_to_bibtex", fake_doi_to_bibtex)
+
+    internal_metadata.update_entries(bib)
+    out = bib.read_text()
+    logs = capsys.readouterr().out
+
+    assert "@article{StableKey" in out
+    assert "title = {New Title}" in out
+    assert "Warning: DOI metadata mismatch" in logs
+    assert "field 'title'" in logs
 
 
 def test_backup_and_duplicate_consolidation(tmp_path, disable_formatting):

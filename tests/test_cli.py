@@ -39,6 +39,9 @@ def test_validate_command_emits_run_summary(tmp_path, monkeypatch, capsys):
     tex = Path(tmp_path / "main.tex")
     bib.write_text("""@article{A,
   title={T},
+  author={Doe, Jane},
+  journal={J. Test.},
+  year={2024},
 }
 """)
     tex.write_text(r"\cite{A}")
