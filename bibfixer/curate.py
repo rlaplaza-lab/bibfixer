@@ -38,7 +38,11 @@ from .fixes import (
     fix_legacy_month_fields,
     uncomment_bibtex_entries,
 )
-from .validation import generate_report
+from .validation import (
+    generate_report,
+    get_missing_required_field_groups,
+    get_required_field_groups,
+)
 
 def _emit_info(logger: RunLogger | None, message: str) -> None:
     if logger:
@@ -69,6 +73,16 @@ def _is_doi_stub(entry: dict[str, Any]) -> bool:
         if entry.get(field):
             return False
     return True
+
+
+def _entry_doi(entry: dict[str, Any]) -> str | None:
+    return utils.normalize_doi(entry.get("doi") or entry.get("DOI") or entry.get("Doi"))
+
+
+def _required_group_label(group: tuple[str, ...]) -> str:
+    if len(group) == 1:
+        return group[0]
+    return "/".join(group)
 
 
 def _parse_single_entry_bibtex(raw_bibtex: str) -> dict[str, Any] | None:
@@ -129,20 +143,33 @@ def _is_missing_field(value: Any) -> bool:
 
 
 def _enrich_partial_entries_from_doi(bib_file: Path) -> int:
-    """Backfill missing core metadata for DOI entries."""
+    """Backfill missing metadata for DOI entries with required-field focus."""
     db = core.parse_bibtex_file(bib_file)
     if not db:
         return 0
 
     changed = 0
-    enrich_fields = ("title", "author", "journal", "year", "volume", "number", "pages")
+    supplementary_fields = ("journal", "volume", "number", "pages")
     for idx, entry in enumerate(db.entries):
         if _is_doi_stub(entry):
             continue
-        doi = utils.normalize_doi(entry.get("doi") or entry.get("DOI") or entry.get("Doi"))
+        doi = _entry_doi(entry)
         if not doi:
             continue
-        if all(not _is_missing_field(entry.get(field)) for field in enrich_fields):
+
+        missing_required_groups = get_missing_required_field_groups(entry)
+        missing_required_fields = {
+            field
+            for group in missing_required_groups
+            for field in group
+        }
+        missing_supplementary_fields = {
+            field
+            for field in supplementary_fields
+            if _is_missing_field(entry.get(field))
+        }
+        enrich_fields = missing_required_fields | missing_supplementary_fields
+        if not enrich_fields:
             continue
 
         fetched_raw = internal_metadata.doi_to_bibtex(doi)
@@ -153,7 +180,7 @@ def _enrich_partial_entries_from_doi(bib_file: Path) -> int:
             continue
 
         new_entry = entry.copy()
-        for field in enrich_fields:
+        for field in sorted(enrich_fields):
             if _is_missing_field(new_entry.get(field)) and not _is_missing_field(fetched.get(field)):
                 new_entry[field] = fetched.get(field)
         # If page information is unavailable from DOI metadata, keep the entry
@@ -176,6 +203,40 @@ def _run_doi_fallbacks(bib_file: Path, logger: RunLogger | None = None) -> None:
     enriched = _enrich_partial_entries_from_doi(bib_file)
     if enriched:
         _emit_info(logger, f"  Enriched {enriched} DOI entr{'y' if enriched == 1 else 'ies'} with missing fields")
+    _warn_unresolved_required_fields_for_doi_entries(bib_file, logger=logger)
+
+
+def _warn_unresolved_required_fields_for_doi_entries(
+    bib_file: Path,
+    logger: RunLogger | None = None,
+) -> None:
+    db = core.parse_bibtex_file(bib_file)
+    if not db:
+        return
+
+    unresolved: list[str] = []
+    for entry in db.entries:
+        doi = _entry_doi(entry)
+        if not doi:
+            continue
+        missing_groups = get_missing_required_field_groups(entry)
+        if not missing_groups:
+            continue
+        key = str(entry.get("ID", "<missing-key>"))
+        entry_type = str(entry.get("ENTRYTYPE", "")).strip().lower() or "<missing-type>"
+        required_groups = get_required_field_groups(entry_type)
+        if not required_groups:
+            continue
+        fields = ", ".join(_required_group_label(group) for group in missing_groups)
+        unresolved.append(f"{key} ({entry_type}): {fields}")
+
+    if unresolved:
+        _emit_info(
+            logger,
+            "  Warning: DOI-backed entries remain incomplete after metadata enrichment:",
+        )
+        for item in unresolved:
+            _emit_info(logger, f"    - {item}")
 
 
 # ---------------------------------------------------------------------------

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import tempfile
 import time
+import re
 from pathlib import Path
 from typing import Any
 from urllib import error as urlerror
@@ -54,6 +55,26 @@ def _normalized_text(value: Any) -> str | None:
     return text.casefold()
 
 
+def _cosmetic_normalized_text(value: Any) -> str | None:
+    """Normalize values while ignoring punctuation-only differences."""
+    normalized = _normalized_text(value)
+    if not normalized:
+        return normalized
+    compact = re.sub(r"[^0-9a-z]+", "", normalized)
+    return compact or None
+
+
+def _is_meaningful_mismatch(before: Any, after: Any) -> bool:
+    """Return whether a mismatch is larger than punctuation/case churn."""
+    normalized_before = _normalized_text(before)
+    normalized_after = _normalized_text(after)
+    if not normalized_before or not normalized_after:
+        return False
+    if normalized_before == normalized_after:
+        return False
+    return _cosmetic_normalized_text(before) != _cosmetic_normalized_text(after)
+
+
 def update_entries(bib_file: Path) -> None:
     """Regenerate DOI-backed entries in place using Crossref BibTeX."""
     db = core.parse_bibtex_file(bib_file)
@@ -77,10 +98,17 @@ def update_entries(bib_file: Path) -> None:
             before = _normalized_text(entry.get(field))
             after = _normalized_text(fetched.get(field))
             if before and after and before != after:
-                print(
-                    f"  Warning: DOI metadata mismatch for {original_key or doi} "
-                    f"field '{field}': existing differs from Crossref"
-                )
+                key_or_doi = original_key or doi
+                if _is_meaningful_mismatch(entry.get(field), fetched.get(field)):
+                    print(
+                        f"  Warning: DOI metadata meaningful mismatch for {key_or_doi} "
+                        f"field '{field}': existing differs from Crossref"
+                    )
+                else:
+                    print(
+                        f"  Notice: DOI metadata cosmetic mismatch for {key_or_doi} "
+                        f"field '{field}': punctuation/capitalization differs"
+                    )
 
         regenerated = fetched.copy()
         regenerated["ID"] = original_key or fetched.get("ID", "")

@@ -138,3 +138,16 @@ def test_required_fields_validation_accepts_alternative_group(tmp_path, monkeypa
     issues = validation.check_required_fields_by_entry_type()
     assert issues == []
     assert validation.validate_bibliography()
+
+
+def test_get_missing_required_field_groups_reports_or_groups():
+    entry = {
+        "ENTRYTYPE": "inbook",
+        "ID": "K",
+        "title": "Example",
+        "publisher": "Pub",
+        "year": "2025",
+    }
+    missing_groups = validation.get_missing_required_field_groups(entry)
+    assert ("author", "editor") in missing_groups
+    assert ("chapter", "pages") in missing_groups

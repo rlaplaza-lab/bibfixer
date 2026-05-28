@@ -42,6 +42,24 @@ def _has_nonempty_field(entry: dict, field: str) -> bool:
     return True
 
 
+def get_required_field_groups(entry_type: str) -> tuple[tuple[str, ...], ...]:
+    """Return required-field groups for a BibTeX entry type."""
+    normalized = str(entry_type or "").strip().lower()
+    return _REQUIRED_FIELDS_BY_ENTRYTYPE.get(normalized, ())
+
+
+def get_missing_required_field_groups(entry: dict) -> list[tuple[str, ...]]:
+    """Return required-field groups currently missing from *entry*."""
+    entry_type = str(entry.get("ENTRYTYPE", "")).strip().lower()
+    required_groups = get_required_field_groups(entry_type)
+    missing: list[tuple[str, ...]] = []
+    for group in required_groups:
+        if any(_has_nonempty_field(entry, field) for field in group):
+            continue
+        missing.append(group)
+    return missing
+
+
 def check_required_fields_by_entry_type() -> list[str]:
     """Return validation issues for missing BibTeX required fields."""
     issues: list[str] = []
@@ -50,13 +68,8 @@ def check_required_fields_by_entry_type() -> list[str]:
             entry_type = str(entry.get("ENTRYTYPE", "")).strip().lower()
             if not entry_type:
                 continue
-            required_groups = _REQUIRED_FIELDS_BY_ENTRYTYPE.get(entry_type)
-            if not required_groups:
-                continue
             key = entry.get("ID", "<missing-key>")
-            for group in required_groups:
-                if any(_has_nonempty_field(entry, field) for field in group):
-                    continue
+            for group in get_missing_required_field_groups(entry):
                 if len(group) == 1:
                     issues.append(
                         f"{bib.name}: entry {key} ({entry_type}) missing required field {group[0]}"

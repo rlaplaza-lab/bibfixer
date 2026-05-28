@@ -471,6 +471,67 @@ def test_update_enriches_partial_entries_missing_pages(tmp_path, monkeypatch, ca
     assert "title = {Fetched Title}" in out
 
 
+def test_update_fallback_enriches_required_or_group_fields(tmp_path, monkeypatch):
+    bib = tmp_path / "local.bib"
+    bib.write_text("""@book{MissingAuthorOrEditor,
+  title={Collected Works},
+  publisher={Pub House},
+  year={2024},
+  doi={10.1000/book123},
+}
+""")
+
+    def fake_update(_bib_file):
+        raise RuntimeError("simulated update failure")
+
+    def fake_doi_to_bibtex(doi):
+        if doi == "10.1000/book123":
+            return """@book{Fetched,
+  editor={Doe, Jane},
+  title={Collected Works},
+  publisher={Pub House},
+  year={2024},
+  doi={10.1000/book123},
+}
+"""
+        return None
+
+    monkeypatch.setattr("bibfixer._internal.metadata.update_entries", fake_update)
+    monkeypatch.setattr("bibfixer._internal.metadata.doi_to_bibtex", fake_doi_to_bibtex)
+
+    update_with_metadata(bib)
+    out = bib.read_text()
+    assert "editor = {Doe, Jane}" in out
+
+
+def test_update_warns_when_doi_entry_still_missing_required_fields(tmp_path, monkeypatch, capsys):
+    bib = tmp_path / "references.bib"
+    bib.write_text("""@article{StubKey,
+  doi={10.1038/nature12373},
+}
+""")
+
+    def fake_update(_bib_file):
+        raise RuntimeError("simulated update failure")
+
+    def fake_doi_to_bibtex(doi):
+        if doi == "10.1038/nature12373":
+            return """@article{Fetched,
+  title={Only Title},
+  doi={10.1038/nature12373},
+}
+"""
+        return None
+
+    monkeypatch.setattr("bibfixer._internal.metadata.update_entries", fake_update)
+    monkeypatch.setattr("bibfixer._internal.metadata.doi_to_bibtex", fake_doi_to_bibtex)
+
+    update_with_metadata(bib)
+    logs = capsys.readouterr().out
+    assert "DOI-backed entries remain incomplete" in logs
+    assert "StubKey (article): author, journal, year" in logs
+
+
 def test_doi_to_bibtex_fetches_crossref_response(monkeypatch):
     class FakeResponse:
         def __init__(self, body: str):
@@ -536,8 +597,39 @@ def test_update_entries_regenerates_and_warns_on_mismatch(tmp_path, monkeypatch,
 
     assert "@article{StableKey" in out
     assert "title = {New Title}" in out
-    assert "Warning: DOI metadata mismatch" in logs
+    assert "Warning: DOI metadata meaningful mismatch" in logs
     assert "field 'title'" in logs
+
+
+def test_update_entries_reports_cosmetic_mismatch_as_notice(tmp_path, monkeypatch, capsys):
+    bib = tmp_path / "refs.bib"
+    bib.write_text(
+        """@article{StableKey,
+  title={An Example: Results},
+  year={2020},
+  journal={Old Journal},
+  doi={10.1038/nature12373},
+}
+"""
+    )
+
+    def fake_doi_to_bibtex(doi):
+        if doi == "10.1038/nature12373":
+            return """@article{CrossrefKey,
+  title={An example results},
+  year={2020},
+  journal={Old Journal},
+  doi={10.1038/nature12373},
+}
+"""
+        return None
+
+    monkeypatch.setattr("bibfixer._internal.metadata.doi_to_bibtex", fake_doi_to_bibtex)
+
+    internal_metadata.update_entries(bib)
+    logs = capsys.readouterr().out
+    assert "Notice: DOI metadata cosmetic mismatch" in logs
+    assert "meaningful mismatch" not in logs
 
 
 def test_backup_and_duplicate_consolidation(tmp_path, disable_formatting):
