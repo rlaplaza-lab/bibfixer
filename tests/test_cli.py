@@ -51,3 +51,26 @@ def test_validate_command_emits_run_summary(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "Run Summary" in out
     assert "Action: validate" in out
+
+
+def test_cli_accepts_bib_path_without_action(tmp_path, monkeypatch):
+    bib = tmp_path / "references.bib"
+    bib.write_text("""@article{A,
+  title={T},
+}
+""")
+    monkeypatch.chdir(tmp_path)
+
+    captured: dict[str, object] = {}
+
+    def fake_run_pipeline(action, options, bib_files):
+        captured["action"] = action
+        captured["bib_files"] = [Path(p) for p in bib_files]
+        return pipeline.PipelineResult(success=True)
+
+    monkeypatch.setattr(cli, "run_pipeline", fake_run_pipeline)
+    monkeypatch.setattr(sys, "argv", ["bibfixer", "references.bib", "--yes", "--skip-metadata-update"])
+
+    assert cli.main() == 0
+    assert captured["action"] == "polish"
+    assert captured["bib_files"] == [Path("references.bib")]

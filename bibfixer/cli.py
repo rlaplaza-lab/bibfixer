@@ -88,15 +88,14 @@ Examples:
   %(prog)s curate            # Only curate/cleanup bibliography
   %(prog)s polish            # Validate, curate, then validate again (default)
   %(prog)s polish --no-backup  # Polish without creating backups
+  %(prog)s references.bib    # Polish a specific bibliography file
         """,
     )
 
     parser.add_argument(
-        'action',
-        nargs='?',
-        default='polish',
-        choices=['validate', 'curate', 'polish'],
-        help='Action to perform: validate (only check), curate (only cleanup), or polish (validate + curate + validate)'
+        'targets',
+        nargs='*',
+        help='Optional action (validate/curate/polish) followed by optional .bib file paths'
     )
     parser.add_argument('--no-backup', action='store_true', help='Skip creating backup files during curation')
     parser.add_argument('--yes', '-y', action='store_true', help='Skip confirmation prompt and proceed automatically')
@@ -105,13 +104,27 @@ Examples:
 
     args = parser.parse_args()
 
-    bib_files = resolve_bib_files()
+    actions = {"validate", "curate", "polish"}
+    action = "polish"
+    explicit_inputs = list(args.targets)
+    if explicit_inputs and explicit_inputs[0] in actions:
+        action = explicit_inputs[0]
+        explicit_inputs = explicit_inputs[1:]
+    elif any(token in actions for token in explicit_inputs[1:]):
+        parser.error("Action must be the first positional argument")
+
+    try:
+        bib_files = resolve_bib_files(explicit_inputs if explicit_inputs else None)
+    except ValueError as exc:
+        print(str(exc))
+        return 1
+
     use_metadata_update = not args.skip_metadata_update
     if not bib_files:
         print("No .bib files found in sections/ directory or root")
         return 1
 
-    if args.action == 'validate':
+    if action == 'validate':
         result = run_pipeline(
             action='validate',
             options=PipelineOptions(
@@ -123,7 +136,7 @@ Examples:
         )
         return 0 if result.success else 1
 
-    if args.action == 'curate':
+    if action == 'curate':
         if not args.yes:
             resp = input("\nProceed with curation? This will modify files in place. [y/N]: ")
             if resp.lower() != 'y':

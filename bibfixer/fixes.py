@@ -508,6 +508,12 @@ def fix_legacy_month_fields(bib_file: Path) -> int:
                 break
         if month_value:
             month_clean = str(month_value).strip().strip('{}').lower()
+            # With interpolate_strings disabled, bibtexparser may expose
+            # unquoted macros as object repr strings (e.g. BibDataString('june')).
+            # Extract the macro token so month normalization can still apply.
+            macro_match = re.search(r"bibdatastring\('([^']+)'\)", month_clean)
+            if macro_match:
+                month_clean = macro_match.group(1).strip().lower()
             try:
                 int(month_clean)
                 continue

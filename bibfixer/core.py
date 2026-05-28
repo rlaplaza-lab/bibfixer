@@ -35,7 +35,7 @@ except ImportError:
 import bibtexparser  # type: ignore[import]
 from bibtexparser.bparser import BibTexParser  # type: ignore[import]
 from bibtexparser.bwriter import BibTexWriter  # type: ignore[import]
-from bibtexparser.customization import convert_to_unicode  # type: ignore[import]
+from bibtexparser.latexenc import latex_to_unicode  # type: ignore[import]
 
 # constant list that was previously defined in the monolithic script
 FIELDS_TO_REMOVE = [
@@ -69,6 +69,14 @@ class EntryMeta:
     entry: dict[str, Any]
 
 
+def _safe_convert_to_unicode(record: dict[str, Any]) -> dict[str, Any]:
+    """Convert string fields to unicode without breaking macro expressions."""
+    for key, value in list(record.items()):
+        if isinstance(value, str):
+            record[key] = latex_to_unicode(value)
+    return record
+
+
 class BibFile:
     """Lightweight wrapper around a BibTeX file and its parsed database.
 
@@ -83,7 +91,10 @@ class BibFile:
 
     def read(self) -> None:
         parser = BibTexParser()
-        parser.customization = convert_to_unicode
+        # Keep unresolved string macros (e.g. month=sept) as raw values so
+        # parsing remains robust even when custom strings are not defined.
+        parser.interpolate_strings = False
+        parser.customization = _safe_convert_to_unicode
         parser.ignore_nonstandard_types = False
         parser.homogenise_fields = False
 

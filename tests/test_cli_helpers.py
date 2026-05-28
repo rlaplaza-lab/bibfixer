@@ -166,6 +166,20 @@ def test_fix_legacy_year_and_month(tmp_path):
     assert 'month' in text and '4' in text
 
 
+def test_fix_legacy_month_macro_token(tmp_path):
+    bib = tmp_path / 'macro-month.bib'
+    bib.write_text(
+        """@article{A,
+  month=june,
+}
+"""
+    )
+    m = cli.fix_legacy_month_fields(bib)
+    text = bib.read_text()
+    assert m == 1
+    assert 'month' in text and '6' in text
+
+
 def test_remove_accents_and_malformed_author(tmp_path):
     bib = tmp_path / 'auth.bib'
     # author with accented characters and malformed patterns

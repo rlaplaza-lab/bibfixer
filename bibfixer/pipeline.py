@@ -78,6 +78,38 @@ def run_pipeline(action: str, options: PipelineOptions, bib_files: list[Path]) -
     )
 
 
-def resolve_bib_files() -> list[Path]:
-    """Resolve bibliography inputs consistently for all actions."""
-    return helpers.collect_all_bib_files()
+def resolve_bib_files(explicit_inputs: list[str] | None = None) -> list[Path]:
+    """Resolve bibliography inputs consistently for all actions.
+
+    When *explicit_inputs* is provided, only those paths are used.
+    """
+    if not explicit_inputs:
+        return helpers.collect_all_bib_files()
+
+    bib_files: list[Path] = []
+    missing: list[str] = []
+    seen: set[Path] = set()
+
+    for raw in explicit_inputs:
+        candidate = Path(raw)
+        if not candidate.exists():
+            missing.append(raw)
+            continue
+        if candidate.is_dir():
+            for nested in sorted(candidate.glob("*.bib")):
+                if nested not in seen:
+                    seen.add(nested)
+                    bib_files.append(nested)
+            continue
+        if candidate.suffix.lower() != ".bib":
+            continue
+        if candidate not in seen:
+            seen.add(candidate)
+            bib_files.append(candidate)
+
+    if missing:
+        joined = ", ".join(missing)
+        raise ValueError(f"Bibliography file(s) not found: {joined}")
+    if not bib_files:
+        raise ValueError("No .bib files found in explicit inputs")
+    return bib_files

@@ -55,3 +55,17 @@ def test_multiline_value(tmp_path):
     assert "First line" in joined
     assert "second line" in joined
     assert "\n" not in joined
+
+
+def test_undefined_string_macro_does_not_crash_parser(tmp_path):
+    sample = """@article{macro,
+  title={Macro Month},
+  month=sept,
+}
+"""
+    path = tmp_path / "macro.bib"
+    path.write_text(sample)
+
+    bib = BibFile(path)
+    assert len(bib.entries) == 1
+    assert bib.entries[0].get("ID") == "macro"
