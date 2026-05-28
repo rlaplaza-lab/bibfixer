@@ -1,0 +1,62 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bibfixer"
+version = "0.1.8"
+description = "Utility library and CLI for managing LaTeX bibliography files."
+authors = [
+    {name = "Your Name", email = "you@example.com"},
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    # bibtexparser 2.0 introduced a backward-incompatible restructure of its
+    # package layout; bibfixer’s imports still target the 1.x layout so we
+    # constrain the requirement.  The older bibtexparser also depends on
+    # pyparsing <3, hence we pin that here as well to avoid incompatibilities.
+    # See https://github.com/NScholte/bibtexparser for the new API if we ever
+    # migrate.
+    "bibtexparser>=1.3,<2",
+    # ISO 4 journal abbreviation support is required for the built-in
+    # heuristic that replaces unrecognised titles.  The package pulls in
+    # `nltk` and requires appropriate data (eg. wordnet) to be available.
+    "iso4>=0.0.2",
+]
+
+[project.optional-dependencies]
+pybtex = ["pybtex>=0.24"]
+
+# development/test tools
+test = ["pytest", "ruff", "mypy"]
+
+[project.scripts]
+bibfixer = "bibfixer.cli:main"
+
+[tool.setuptools]
+# include our CSV mapping files in the installed package
+include-package-data = true
+
+[tool.setuptools.packages.find]
+# search from the project root so the editable install adds the root
+# directory to sys.path.  previously we limited discovery to
+# "bibfixer", which caused pip to write a path ending in
+# ``.../bibfixer/bibfixer``.  when running the CLI outside the
+# checkout this meant ``import bibfixer`` failed because Python looked
+# for a package inside that directory and found nothing.  using an empty
+# where ensures the top-level package directory is on sys.path.
+where = [""]
+exclude = []
+
+[tool.setuptools.package-data]
+"bibfixer" = ["data/*.csv"]

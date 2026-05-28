@@ -1,0 +1,57 @@
+import sys
+import pathlib
+
+# ensure workspace root is on path so that the bibfixer package can be imported
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+
+from bibfixer.core import BibFile
+
+
+def test_bibfile_read_write(tmp_path):
+    sample = """@article{key1,
+  title={A Study},
+  author={Doe, John},
+}
+
+@book{key2,
+  title={Another},
+  author={Smith, Jane},
+}
+"""
+    path = tmp_path / "sample.bib"
+    path.write_text(sample)
+
+    bib = BibFile(path)
+    assert len(bib.entries) == 2
+    keys = {e.get("ID") for e in bib.entries}
+    assert keys == {"key1", "key2"}
+
+    # modify and write back
+    bib.entries[0]["title"] = "Modified"
+    bib.write()
+    bib2 = BibFile(path)
+    assert bib2.entries[0]["title"] == "Modified"
+
+
+def test_multiline_value(tmp_path):
+    sample = """@article{multi,
+  title={First line
+    second line},
+  author={A, B},
+}
+"""
+    path = tmp_path / "multi.bib"
+    path.write_text(sample)
+
+    bib = BibFile(path)
+    entry = bib.entries[0]
+    # bibtexparser may present the title as a list or a multiline string
+    # ensure we can coerce to a single string for consumption
+    val = entry.get("title")
+    if isinstance(val, list):
+        joined = " ".join(str(v) for v in val)
+    else:
+        joined = str(val).replace("\n", " ")
+    assert "First line" in joined
+    assert "second line" in joined
+    assert "\n" not in joined
