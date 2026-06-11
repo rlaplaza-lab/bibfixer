@@ -5,6 +5,7 @@ from bibfixer.utils import (
     normalize_keywords,
     normalize_title,
     transliterate_for_key,
+    extract_entry_doi,
 )
 
 
@@ -51,6 +52,25 @@ def test_normalize_unicode_and_url_and_keywords():
     assert normalize_keywords("Physics, Chemistry,  math ") == "physics,chemistry,math"
     assert normalize_keywords("   ") is None
     assert normalize_keywords(None) is None
+
+
+def test_extract_entry_doi_from_fields_and_url():
+    assert extract_entry_doi({"doi": "10.1000/xyz"}) == "10.1000/xyz"
+    assert extract_entry_doi({"DOI": "10.1000/abc"}) == "10.1000/abc"
+    assert extract_entry_doi({
+        "url": "https://doi.org/10.1038/nature12373",
+    }) == "10.1038/nature12373"
+    assert extract_entry_doi({
+        "url": "http://dx.doi.org/10.1000/xyz",
+    }) == "10.1000/xyz"
+    assert extract_entry_doi({
+        "url": "https://arxiv.org/abs/2509.01536",
+    }) == "10.48550/arxiv.2509.01536"
+    assert extract_entry_doi({
+        "archiveprefix": "arXiv",
+        "eprint": "2402.11651",
+    }) == "10.48550/arxiv.2402.11651"
+    assert extract_entry_doi({"title": "No DOI"}) is None
 
 
 def test_transliterate_for_key():

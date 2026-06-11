@@ -303,7 +303,7 @@ def check_duplicate_dois() -> int:
         bf = BibFile(bib)
         for entry in bf.entries:
             k = utils.normalize_citation_key(entry.get('ID', ''))
-            norm = utils.normalize_doi(entry.get('doi') or entry.get('DOI') or entry.get('Doi'))
+            norm = utils.extract_entry_doi(entry)
             if norm:
                 # ``EntryMeta`` requires a non‑None key; falling back to empty
                 # string is safe because the algorithms below only care about

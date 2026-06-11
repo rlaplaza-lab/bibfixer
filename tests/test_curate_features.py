@@ -434,6 +434,62 @@ def test_update_failure_still_falls_back_to_doi_to_bibtex(tmp_path, monkeypatch,
     assert "@article{StubKey" in out
 
 
+def test_supplement_fetched_metadata_adds_journal_from_json(monkeypatch):
+    fetched = {"title": "Example", "year": "2024"}
+    entry = {"title": "Example", "year": "2024", "pages": "1-10"}
+    work = {"container-title": ["Nature Chemistry"], "volume": "16", "issue": "3"}
+    monkeypatch.setattr(
+        "bibfixer._internal.metadata._fetch_crossref_work",
+        lambda doi: work,
+    )
+
+    supplemented = internal_metadata.supplement_fetched_metadata(
+        "10.1038/example",
+        fetched,
+        entry=entry,
+    )
+
+    assert supplemented["journal"] == "Nature Chemistry"
+    assert supplemented["volume"] == "16"
+    assert supplemented["number"] == "3"
+    assert "pages" not in supplemented
+
+
+def test_update_enriches_pages_when_doi_only_in_url(tmp_path, monkeypatch):
+    bib = tmp_path / "local.bib"
+    bib.write_text("""@article{UrlOnly,
+  title={Already Here},
+  author={Doe, Jane},
+  journal={J. Test.},
+  year={2024},
+  url={https://doi.org/10.1038/nature12373},
+}
+""")
+
+    def fake_doi_to_bibtex(doi):
+        if doi == "10.1038/nature12373":
+            return """@article{Fetched,
+  title={Fetched Title},
+  author={Fetched, Author},
+  journal={Fetched Journal},
+  year={2024},
+  doi={10.1038/nature12373},
+}
+"""
+        return None
+
+    monkeypatch.setattr("bibfixer._internal.metadata.doi_to_bibtex", fake_doi_to_bibtex)
+    monkeypatch.setattr(
+        "bibfixer._internal.metadata._fetch_crossref_work",
+        lambda doi: {"page": "54-58"} if doi == "10.1038/nature12373" else None,
+    )
+
+    update_with_metadata(bib)
+    out = bib.read_text()
+    assert "pages = {54-58}" in out
+    assert "doi = {10.1038/nature12373}" in out
+
+
 def test_update_enriches_partial_entries_missing_pages(tmp_path, monkeypatch, capsys):
     bib = tmp_path / "local.bib"
     bib.write_text("""@article{HasMetaButNoPages,
@@ -525,6 +581,7 @@ def test_update_warns_when_doi_entry_still_missing_required_fields(tmp_path, mon
 
     monkeypatch.setattr("bibfixer._internal.metadata.update_entries", fake_update)
     monkeypatch.setattr("bibfixer._internal.metadata.doi_to_bibtex", fake_doi_to_bibtex)
+    monkeypatch.setattr("bibfixer._internal.metadata._fetch_crossref_work", lambda doi: None)
 
     update_with_metadata(bib)
     logs = capsys.readouterr().out
@@ -590,12 +647,14 @@ def test_update_entries_preserves_local_fields_missing_from_crossref(tmp_path, m
         return None
 
     monkeypatch.setattr("bibfixer._internal.metadata.doi_to_bibtex", fake_doi_to_bibtex)
+    monkeypatch.setattr("bibfixer._internal.metadata._fetch_crossref_work", lambda doi: None)
 
     internal_metadata.update_entries(bib)
     out = bib.read_text()
 
-    assert "journal={Local Journal}" in out
-    assert "pages={12--15}" in out
+    assert "Local Journal" in out
+    assert "12--15" in out
+    assert "volume" not in out.lower()
 
 
 def test_update_fallback_enriches_inproceedings_pages(tmp_path, monkeypatch):

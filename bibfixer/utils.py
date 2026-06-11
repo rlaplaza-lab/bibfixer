@@ -4,7 +4,17 @@ from __future__ import annotations
 
 import unicodedata
 import re
-from typing import Optional
+from typing import Any, Mapping, Optional
+
+
+_DOI_URL_PATTERN = re.compile(
+    r"(?:https?://)?(?:dx\.)?doi\.org/([^\s?#}]+)",
+    re.IGNORECASE,
+)
+_ARXIV_ABS_URL_PATTERN = re.compile(
+    r"arxiv\.org/abs/([0-9]+\.[0-9]+(?:v\d+)?)",
+    re.IGNORECASE,
+)
 
 
 def normalize_unicode(text: Optional[str]) -> Optional[str]:
@@ -44,6 +54,36 @@ def normalize_doi(doi: Optional[str]) -> Optional[str]:
     if doi.startswith("https://doi.org/"):
         doi = doi[16:]
     return doi.strip()
+
+
+def extract_entry_doi(entry: Mapping[str, Any]) -> Optional[str]:
+    """Return a normalized DOI from entry fields or resolvable identifier URLs."""
+    for key in ("doi", "DOI", "Doi"):
+        normalized = normalize_doi(entry.get(key))
+        if normalized:
+            return normalized
+    for key in ("url", "URL", "Url"):
+        url = entry.get(key)
+        if not url:
+            continue
+        text = str(url).strip()
+        match = _DOI_URL_PATTERN.search(text)
+        if match:
+            normalized = normalize_doi(match.group(1))
+            if normalized:
+                return normalized
+        arxiv_match = _ARXIV_ABS_URL_PATTERN.search(text)
+        if arxiv_match:
+            normalized = normalize_doi(f"10.48550/arxiv.{arxiv_match.group(1)}")
+            if normalized:
+                return normalized
+    archiveprefix = str(entry.get("archiveprefix") or entry.get("ArchivePrefix") or "").strip().lower()
+    eprint = str(entry.get("eprint") or entry.get("Eprint") or "").strip()
+    if archiveprefix == "arxiv" and eprint:
+        normalized = normalize_doi(f"10.48550/arxiv.{eprint.lower()}")
+        if normalized:
+            return normalized
+    return None
 
 
 def normalize_url(url: Optional[str]) -> Optional[str]:

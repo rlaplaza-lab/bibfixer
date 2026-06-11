@@ -68,8 +68,7 @@ def create_backup(bib_file: Path, logger: RunLogger | None = None) -> Path:
 
 def _is_doi_stub(entry: dict[str, Any]) -> bool:
     """Return True if entry looks like a DOI-only stub."""
-    doi = entry.get('doi') or entry.get('DOI') or entry.get('Doi')
-    if not utils.normalize_doi(doi):
+    if not utils.extract_entry_doi(entry):
         return False
     # treat entries missing all core bibliographic fields as stubs
     for field in ("title", "author", "year"):
@@ -79,7 +78,7 @@ def _is_doi_stub(entry: dict[str, Any]) -> bool:
 
 
 def _entry_doi(entry: dict[str, Any]) -> str | None:
-    return utils.normalize_doi(entry.get("doi") or entry.get("DOI") or entry.get("Doi"))
+    return utils.extract_entry_doi(entry)
 
 
 def _required_group_label(group: tuple[str, ...]) -> str:
@@ -117,7 +116,7 @@ def _fill_stub_entries_from_doi(bib_file: Path) -> int:
     for idx, entry in enumerate(db.entries):
         if not _is_doi_stub(entry):
             continue
-        doi = utils.normalize_doi(entry.get("doi") or entry.get("DOI") or entry.get("Doi"))
+        doi = utils.extract_entry_doi(entry)
         if not doi:
             continue
         fetched_raw = internal_metadata.doi_to_bibtex(doi)
@@ -126,6 +125,7 @@ def _fill_stub_entries_from_doi(bib_file: Path) -> int:
         fetched = _parse_single_entry_bibtex(fetched_raw)
         if not fetched:
             continue
+        fetched = internal_metadata.supplement_fetched_metadata(doi, fetched)
         new_entry = fetched.copy()
         # preserve the caller's key so TeX references remain stable.
         new_entry["ID"] = entry.get("ID", new_entry.get("ID", ""))
@@ -161,8 +161,11 @@ def _enrich_partial_entries_from_doi(bib_file: Path) -> int:
         fetched = _parse_single_entry_bibtex(fetched_raw)
         if not fetched:
             continue
+        fetched = internal_metadata.supplement_fetched_metadata(doi, fetched, entry=entry)
 
         new_entry = entry.copy()
+        if is_missing_field(new_entry.get("doi")):
+            new_entry["doi"] = doi
         for field in sorted(enrich_fields):
             if is_missing_field(new_entry.get(field)) and not is_missing_field(fetched.get(field)):
                 new_entry[field] = fetched.get(field)
