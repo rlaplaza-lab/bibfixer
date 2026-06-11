@@ -14,6 +14,7 @@ from urllib import request as urlrequest
 from .. import core
 from .. import utils
 from ..fixes import abbreviate_journal_names as _abbreviate_journal_names
+from ..validation import get_fields_to_enrich, is_missing_field
 
 
 class MetadataUpdateError(RuntimeError):
@@ -75,8 +76,45 @@ def _is_meaningful_mismatch(before: Any, after: Any) -> bool:
     return _cosmetic_normalized_text(before) != _cosmetic_normalized_text(after)
 
 
+def _apply_crossref_metadata(entry: dict[str, Any], fetched: dict[str, Any], doi: str) -> dict[str, Any]:
+    """Merge Crossref metadata into *entry*, filling gaps and refreshing core fields."""
+    original_key = entry.get("ID", "")
+    merged = entry.copy()
+
+    for field in _MISMATCH_FIELDS:
+        fetched_value = fetched.get(field)
+        if is_missing_field(fetched_value):
+            continue
+        before = _normalized_text(entry.get(field))
+        after = _normalized_text(fetched_value)
+        if before and after and before != after:
+            key_or_doi = original_key or doi
+            if _is_meaningful_mismatch(entry.get(field), fetched_value):
+                print(
+                    f"  Warning: DOI metadata meaningful mismatch for {key_or_doi} "
+                    f"field '{field}': existing differs from Crossref"
+                )
+            else:
+                print(
+                    f"  Notice: DOI metadata cosmetic mismatch for {key_or_doi} "
+                    f"field '{field}': punctuation/capitalization differs"
+                )
+        merged[field] = fetched_value
+
+    for field in sorted(get_fields_to_enrich(entry)):
+        if field in _MISMATCH_FIELDS:
+            continue
+        if is_missing_field(merged.get(field)) and not is_missing_field(fetched.get(field)):
+            merged[field] = fetched.get(field)
+
+    merged["ID"] = original_key or fetched.get("ID", "")
+    if is_missing_field(merged.get("doi")):
+        merged["doi"] = doi
+    return merged
+
+
 def update_entries(bib_file: Path) -> None:
-    """Regenerate DOI-backed entries in place using Crossref BibTeX."""
+    """Refresh DOI-backed entries in place using Crossref BibTeX."""
     db = core.parse_bibtex_file(bib_file)
     if not db:
         return
@@ -93,30 +131,9 @@ def update_entries(bib_file: Path) -> None:
         if not fetched:
             continue
 
-        original_key = entry.get("ID", "")
-        for field in _MISMATCH_FIELDS:
-            before = _normalized_text(entry.get(field))
-            after = _normalized_text(fetched.get(field))
-            if before and after and before != after:
-                key_or_doi = original_key or doi
-                if _is_meaningful_mismatch(entry.get(field), fetched.get(field)):
-                    print(
-                        f"  Warning: DOI metadata meaningful mismatch for {key_or_doi} "
-                        f"field '{field}': existing differs from Crossref"
-                    )
-                else:
-                    print(
-                        f"  Notice: DOI metadata cosmetic mismatch for {key_or_doi} "
-                        f"field '{field}': punctuation/capitalization differs"
-                    )
-
-        regenerated = fetched.copy()
-        regenerated["ID"] = original_key or fetched.get("ID", "")
-        if "doi" not in regenerated and doi:
-            regenerated["doi"] = doi
-
-        if regenerated != entry:
-            db.entries[idx] = regenerated
+        merged = _apply_crossref_metadata(entry, fetched, doi)
+        if merged != entry:
+            db.entries[idx] = merged
             changed += 1
 
     if changed:

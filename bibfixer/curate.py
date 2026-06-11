@@ -41,8 +41,10 @@ from .fixes import (
 )
 from .validation import (
     generate_report,
+    get_fields_to_enrich,
     get_missing_required_field_groups,
     get_required_field_groups,
+    is_missing_field,
 )
 
 def _emit_info(logger: RunLogger | None, message: str) -> None:
@@ -135,14 +137,6 @@ def _fill_stub_entries_from_doi(bib_file: Path) -> int:
     return changed
 
 
-def _is_missing_field(value: Any) -> bool:
-    if value is None:
-        return True
-    if isinstance(value, str):
-        return not value.strip()
-    return False
-
-
 def _enrich_partial_entries_from_doi(bib_file: Path) -> int:
     """Backfill missing metadata for DOI entries with required-field focus."""
     db = core.parse_bibtex_file(bib_file)
@@ -150,7 +144,6 @@ def _enrich_partial_entries_from_doi(bib_file: Path) -> int:
         return 0
 
     changed = 0
-    supplementary_fields = ("journal", "volume", "number", "pages")
     for idx, entry in enumerate(db.entries):
         if _is_doi_stub(entry):
             continue
@@ -158,18 +151,7 @@ def _enrich_partial_entries_from_doi(bib_file: Path) -> int:
         if not doi:
             continue
 
-        missing_required_groups = get_missing_required_field_groups(entry)
-        missing_required_fields = {
-            field
-            for group in missing_required_groups
-            for field in group
-        }
-        missing_supplementary_fields = {
-            field
-            for field in supplementary_fields
-            if _is_missing_field(entry.get(field))
-        }
-        enrich_fields = missing_required_fields | missing_supplementary_fields
+        enrich_fields = get_fields_to_enrich(entry)
         if not enrich_fields:
             continue
 
@@ -182,11 +164,11 @@ def _enrich_partial_entries_from_doi(bib_file: Path) -> int:
 
         new_entry = entry.copy()
         for field in sorted(enrich_fields):
-            if _is_missing_field(new_entry.get(field)) and not _is_missing_field(fetched.get(field)):
+            if is_missing_field(new_entry.get(field)) and not is_missing_field(fetched.get(field)):
                 new_entry[field] = fetched.get(field)
         # If page information is unavailable from DOI metadata, keep the entry
         # clean by removing an empty pages field rather than leaving pages = {}.
-        if _is_missing_field(new_entry.get("pages")) and _is_missing_field(fetched.get("pages")):
+        if is_missing_field(new_entry.get("pages")) and is_missing_field(fetched.get("pages")):
             new_entry.pop("pages", None)
         db.entries[idx] = new_entry
         if new_entry != entry:
@@ -302,6 +284,7 @@ def update_with_metadata(bib_file: Path, logger: RunLogger | None = None) -> Non
                     _emit_info(logger, f"  Warning: metadata updater changed DOI for {k} ({dois_before[k]} → {doi_after}), restoring")
                     backup_text = backup_path.read_text(encoding="utf-8")
                     bib_file.write_text(backup_text, encoding="utf-8")
+                    _run_doi_fallbacks(bib_file, logger=logger)
                     return
 
     # remove the temporary backup if everything looks sane

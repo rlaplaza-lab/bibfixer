@@ -140,6 +140,33 @@ def test_required_fields_validation_accepts_alternative_group(tmp_path, monkeypa
     assert validation.validate_bibliography()
 
 
+def test_is_missing_field_treats_placeholders_as_absent():
+    assert validation.is_missing_field(None)
+    assert validation.is_missing_field("")
+    assert validation.is_missing_field("{}")
+    assert validation.is_missing_field("{-}")
+    assert not validation.is_missing_field("Nature")
+
+
+def test_get_fields_to_enrich_includes_required_and_supplementary_fields():
+    article = {
+        "ENTRYTYPE": "article",
+        "title": "Example",
+        "author": "Doe, Jane",
+        "year": "2024",
+    }
+    assert validation.get_fields_to_enrich(article) == {"journal", "volume", "number", "pages"}
+
+    proceedings = {
+        "ENTRYTYPE": "inproceedings",
+        "title": "Talk",
+        "author": "Doe, Jane",
+        "year": "2024",
+        "booktitle": "Proc. Example",
+    }
+    assert validation.get_fields_to_enrich(proceedings) == {"pages", "volume", "number"}
+
+
 def test_get_missing_required_field_groups_reports_or_groups():
     entry = {
         "ENTRYTYPE": "inbook",

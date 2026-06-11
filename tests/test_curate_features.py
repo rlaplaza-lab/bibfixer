@@ -564,6 +564,75 @@ def test_doi_to_bibtex_fetches_crossref_response(monkeypatch):
     assert seen["timeout"] > 0
 
 
+def test_update_entries_preserves_local_fields_missing_from_crossref(tmp_path, monkeypatch):
+    bib = tmp_path / "refs.bib"
+    bib.write_text(
+        """@article{StableKey,
+  title={Local Title},
+  author={Doe, Jane},
+  year={2024},
+  journal={Local Journal},
+  pages={12--15},
+  doi={10.1038/nature12373},
+}
+"""
+    )
+
+    def fake_doi_to_bibtex(doi):
+        if doi == "10.1038/nature12373":
+            return """@article{CrossrefKey,
+  title={Local Title},
+  author={Doe, Jane},
+  year={2024},
+  doi={10.1038/nature12373},
+}
+"""
+        return None
+
+    monkeypatch.setattr("bibfixer._internal.metadata.doi_to_bibtex", fake_doi_to_bibtex)
+
+    internal_metadata.update_entries(bib)
+    out = bib.read_text()
+
+    assert "journal={Local Journal}" in out
+    assert "pages={12--15}" in out
+
+
+def test_update_fallback_enriches_inproceedings_pages(tmp_path, monkeypatch):
+    bib = tmp_path / "local.bib"
+    bib.write_text("""@inproceedings{ConfTalk,
+  title={A Talk},
+  author={Doe, Jane},
+  booktitle={Proc. Example},
+  year={2024},
+  doi={10.1000/conf123},
+}
+""")
+
+    def fake_update(_bib_file):
+        raise RuntimeError("simulated update failure")
+
+    def fake_doi_to_bibtex(doi):
+        if doi == "10.1000/conf123":
+            return """@inproceedings{Fetched,
+  title={A Talk},
+  author={Doe, Jane},
+  booktitle={Proc. Example},
+  year={2024},
+  pages={101--110},
+  doi={10.1000/conf123},
+}
+"""
+        return None
+
+    monkeypatch.setattr("bibfixer._internal.metadata.update_entries", fake_update)
+    monkeypatch.setattr("bibfixer._internal.metadata.doi_to_bibtex", fake_doi_to_bibtex)
+
+    update_with_metadata(bib)
+    out = bib.read_text()
+    assert "pages = {101--110}" in out
+
+
 def test_update_entries_regenerates_and_warns_on_mismatch(tmp_path, monkeypatch, capsys):
     bib = tmp_path / "refs.bib"
     bib.write_text(

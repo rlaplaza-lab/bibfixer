@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict
 from pathlib import Path
-from typing import Iterable, List
+from typing import Any, Iterable, List
 
 from . import core, utils, helpers
 from .core import BibFile
@@ -32,14 +32,49 @@ _REQUIRED_FIELDS_BY_ENTRYTYPE: dict[str, tuple[tuple[str, ...], ...]] = {
     "unpublished": (("author",), ("title",), ("note",)),
 }
 
+# Fields that are not strictly required by BibTeX but are needed for complete citations.
+_CITATION_SUPPLEMENTARY_FIELDS_BY_ENTRYTYPE: dict[str, tuple[str, ...]] = {
+    "article": ("volume", "number", "pages"),
+    "inproceedings": ("pages", "volume", "number"),
+    "conference": ("pages", "volume", "number"),
+    "incollection": ("pages", "volume", "number"),
+    "inbook": ("chapter",),
+    "techreport": ("number",),
+}
+
+_EMPTY_FIELD_PLACEHOLDERS = frozenset({"{}", "{-}", "{--}"})
+
+
+def is_missing_field(value: Any) -> bool:
+    """Return whether a BibTeX field value should be treated as absent."""
+    if value is None:
+        return True
+    if isinstance(value, str):
+        stripped = value.strip()
+        if not stripped:
+            return True
+        if stripped in _EMPTY_FIELD_PLACEHOLDERS:
+            return True
+        return False
+    return False
+
+
+def get_fields_to_enrich(entry: dict) -> set[str]:
+    """Return bibliographic fields that should be backfilled when missing."""
+    entry_type = str(entry.get("ENTRYTYPE", "")).strip().lower()
+    fields: set[str] = set()
+    for group in get_required_field_groups(entry_type):
+        for field in group:
+            if is_missing_field(entry.get(field)):
+                fields.add(field)
+    for field in _CITATION_SUPPLEMENTARY_FIELDS_BY_ENTRYTYPE.get(entry_type, ()):
+        if is_missing_field(entry.get(field)):
+            fields.add(field)
+    return fields
+
 
 def _has_nonempty_field(entry: dict, field: str) -> bool:
-    value = entry.get(field)
-    if value is None:
-        return False
-    if isinstance(value, str):
-        return bool(value.strip())
-    return True
+    return not is_missing_field(entry.get(field))
 
 
 def get_required_field_groups(entry_type: str) -> tuple[tuple[str, ...], ...]:
