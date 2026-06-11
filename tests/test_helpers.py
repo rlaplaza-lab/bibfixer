@@ -144,6 +144,24 @@ def test_generate_citation_key_various():
     assert helpers._generate_citation_key(entry2) == ""
 
 
+def test_generate_citation_key_accented_authors():
+    alvarez = {
+        "author": "Álvarez, José",
+        "year": "2014",
+        "journal": "Science Advances",
+        "title": "Quantum Chemistry",
+    }
+    assert helpers._generate_citation_key(alvarez).startswith("Alvarez2014SAQuantum")
+
+    muller = {
+        "author": "Müller, Hans",
+        "year": "2020",
+        "journal": "Angewandte Chemie",
+        "title": "Synthesis",
+    }
+    assert helpers._generate_citation_key(muller).startswith("Muller2020ACSynthesis")
+
+
 def test_citation_patterns_constant():
     # ensure the public constant is defined and matches expected regexes
     assert hasattr(helpers, 'CITATION_PATTERNS')

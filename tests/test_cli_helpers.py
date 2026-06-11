@@ -126,7 +126,7 @@ def test_fix_problematic_unicode(tmp_path):
     fixed = cli.fix_problematic_unicode(bib)
     assert fixed > 0
     content = bib.read_text()
-    assert "--" in content or "\\'" in content
+    assert "--" in content or "{\\'" in content
 
 
 def test_fix_invalid_utf8_bytes(tmp_path):

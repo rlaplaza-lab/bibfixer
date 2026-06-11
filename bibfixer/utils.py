@@ -71,6 +71,22 @@ def normalize_keywords(keywords: Optional[str]) -> Optional[str]:
 
 
 
+def transliterate_for_key(text: str) -> str:
+    """Strip combining marks so accented characters become plain ASCII letters.
+
+    Used when building citation keys from author names and titles so that
+    e.g. ``Álvarez`` becomes ``Alvarez`` rather than ``lvarez``.
+    """
+    if not text:
+        return ""
+    normalized = unicodedata.normalize("NFD", str(text))
+    without_marks = "".join(
+        char for char in normalized
+        if unicodedata.category(char) != "Mn"
+    )
+    return unicodedata.normalize("NFC", without_marks)
+
+
 def normalize_title(title: str) -> str:
     """Canonicalise a title for loose comparisons.
 

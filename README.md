@@ -55,6 +55,23 @@ bibfixer polish --yes
 After running, ``references.bib`` and ``main.tex`` will be updated (with
 backups preserved) and you will see a summary report of the modifications.
 
+### LaTeX engines and special characters
+
+bibfixer uses two separate strategies that are both Overleaf-safe:
+
+- **Citation keys** (`\cite{...}`) are always reduced to plain ASCII
+  (`AuthorYearJournalFirstTitleWord`). Accented surnames are transliterated
+  before key generation (e.g. ``Álvarez`` → ``Alvarez2024...``). Keys are
+  sanitized to ``[A-Za-z0-9_:\-]`` and matching ``.tex`` citations are
+  rewritten automatically. Full key standardization runs only when a
+  ``main.tex`` file is present in the project.
+- **Bibliography field values** (author, title, journal, …) are normalized
+  for **pdfLaTeX + BibTeX**, the most common Overleaf setup: Unicode letters
+  become BibTeX accent commands (``{\'a}`` style), and ``&`` and ``%`` are
+  escaped. On **XeLaTeX/LuaLaTeX + biblatex/biber**, those escapes still
+  compile but raw UTF-8 in fields would also work; bibfixer targets the
+  traditional pipeline by default.
+
 ---
 
 

@@ -131,18 +131,18 @@ def fix_invalid_utf8_bytes(bib_file: Path) -> int:
             new_content = new_content[:pos] + b"\\'" + new_content[pos+4:]
             fixed_count += 1
             modified = True
-    # ś -> \'{s}
+    # ś -> {\'s}
     pattern3 = bytes([0x5c, 0x5c, 0xc5, 0x9b])
     if pattern3 in new_content:
         count = new_content.count(pattern3)
-        new_content = new_content.replace(pattern3, b"\\'{s}")
+        new_content = new_content.replace(pattern3, b"{\\'s}")
         fixed_count += count
         modified = True
-    # ł -> \l{}
+    # ł -> {\l}
     pattern4 = bytes([0x5c, 0x5c, 0xc5, 0x82])
     if pattern4 in new_content:
         count = new_content.count(pattern4)
-        new_content = new_content.replace(pattern4, b"\\l{}")
+        new_content = new_content.replace(pattern4, b"{\\l}")
         fixed_count += count
         modified = True
 
@@ -193,14 +193,14 @@ def fix_problematic_unicode(bib_file: Path) -> int:
             def replace_accent(match):
                 char = match.group(1)
                 if char.isalpha():
-                    return f"\\'{{{char}}}"
+                    return f"{{\\'{char}}}"
                 return char
             new_line = re.sub(r'([^\W\d_])\u0301', replace_accent, new_line, flags=re.UNICODE)
             new_line = re.sub(r'((?:\\\\)*)([^\W\d_])\u0301',
-                              lambda m: m.group(1) + f"\\'{{{m.group(2)}}}",
+                              lambda m: m.group(1) + f"{{\\'{m.group(2)}}}",
                               new_line, flags=re.UNICODE)
             if new_line != original_line:
-                fixed_count += new_line.count("\\'") - original_line.count("\\'")
+                fixed_count += new_line.count("{\\'") - original_line.count("{\\'")
                 modified = True
         if modified and new_line != original_line:
             lines[line_num] = new_line
@@ -811,15 +811,15 @@ def fix_malformed_author_fields(bib_file: Path) -> int:
         value = re.sub(r'(?<!\\)/n', ' and ', value)
         value = re.sub(r'\s*\n\s*', ' and ', value)
         # remove excessive backslashes
-        value = re.sub(r'([A-Za-z])\\{4,}([a-z]+)', r'\1{\\"u}\2', value)
+        value = re.sub(r'([A-Za-z])\\{4,}([a-z]+)', r'\1{\"u}\2', value)
         value = re.sub(r'\\{4,}', r'\\', value)
         # incomplete names ending with backslash
         value = re.sub(r',\s*\\+\s*([,}])', r',\1', value)
         value = re.sub(r'([A-Za-z])\s*\\+\s*$', r'\1', value)
         accent_fixes = {
-            r'\\ν': r"\\'{n}",
-            r'\\μ': r"\\'{u}",
-            r'\\149': r"\\'{n}",
+            r'\\ν': r"{\'n}",
+            r'\\μ': r"{\'u}",
+            r'\\149': r"{\'n}",
         }
         for pattern, replacement in accent_fixes.items():
             value = re.sub(pattern, replacement, value)
@@ -828,26 +828,9 @@ def fix_malformed_author_fields(bib_file: Path) -> int:
                 value = value.replace(old, new)
         value = re.sub(r'\\\\ł', r'{\\l}', value)
         value = re.sub(r'(\w)\{\\l\}(?=\s|,|\})', r'\1{\\l{}}', value)
-        unicode_to_latex = {
-            'ń': r"\\'{n}",
-            'á': r"\\'{a}",
-            'é': r"\\'{e}",
-            'í': r"\\'{i}",
-            'ó': r"\\'{o}",
-            'ú': r"\\'{u}",
-            'ü': r'\\"{u}',
-            'ö': r'\\"{o}',
-            'ł': r'\\l{}',
-            'ć': r"\\'{c}",
-            'ś': r"\\'{s}",
-            'ź': r"\\'{z}",
-            'ą': r"\\'{a}",
-            'ę': r"\\'{e}",
-            'ø': r'{\\o}',
-            'Ø': r'{\\O}',
-            'Ł': r'\\L{}',
-        }
-        for unicode_char, latex_cmd in unicode_to_latex.items():
+        for unicode_char, latex_cmd in sorted(
+            UNICODE_LATEX_MAP.items(), key=lambda item: -len(item[0])
+        ):
             if unicode_char in value:
                 value = value.replace(unicode_char, latex_cmd)
         value = re.sub(r'\s+and\s+and\s+', ' and ', value)

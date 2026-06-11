@@ -7,6 +7,8 @@ from bibfixer import helpers
 from bibfixer.fixes import (
     fix_latex_unsafe_characters,
     fix_legacy_month_fields_text,
+    fix_malformed_author_fields,
+    fix_problematic_unicode,
     preprocess_bib_for_parsing,
 )
 from bibfixer import core
@@ -28,6 +30,41 @@ def test_fix_legacy_month_fields_text_unquoted(tmp_path):
     assert "month = {7}" in text
     db = core.parse_bibtex_file(bib)
     assert len(db.entries) == 1
+
+
+def test_fix_malformed_author_unified_accent_syntax(tmp_path):
+    bib = tmp_path / "accents.bib"
+    bib.write_text("""@article{A,
+  author={José and Müller, Hans},
+}
+""")
+    fix_malformed_author_fields(bib)
+    text = bib.read_text()
+    assert r"{\'e}" in text
+    assert r'{\"u}' in text
+
+
+def test_fix_problematic_unicode_braced_accents(tmp_path):
+    bib = tmp_path / "combining.bib"
+    bib.write_text("""@article{U,
+  title={ca\u0301f},
+}
+""")
+    fix_problematic_unicode(bib)
+    assert r"{\'a}" in bib.read_text()
+
+
+def test_fix_latex_unsafe_nested_brace_ampersand(tmp_path):
+    """Line-level & escaping handles nested braces within a single field line."""
+    bib = tmp_path / "nested.bib"
+    bib.write_text("""@article{A,
+  title={Low-{T} studies & more},
+}
+""")
+    fix_latex_unsafe_characters(bib)
+    text = bib.read_text()
+    assert "Low-{T}" in text
+    assert r"\&" in text
 
 
 def test_fix_latex_unsafe_characters(tmp_path):

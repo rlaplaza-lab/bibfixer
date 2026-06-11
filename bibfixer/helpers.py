@@ -251,16 +251,24 @@ def _generate_citation_key(entry: dict) -> str:
             last = first_author.split(',')[0]
         else:
             last = first_author.split()[-1]
-        last = re.sub(r"[^A-Za-z]", "", last)
+        last = re.sub(r"[^A-Za-z]", "", utils.transliterate_for_key(last))
     year = re.sub(r"[^0-9]", "", str(entry.get('year', '')))
     journal = entry.get('journal', '')
     jabr = ''
     if journal:
-        jabr = ''.join(w[0] for w in journal.split() if w and w[0].isalpha())
+        jabr = ''.join(
+            w[0]
+            for w in utils.transliterate_for_key(journal).split()
+            if w and w[0].isalpha()
+        )
     title = entry.get('title', '')
     firstword = ''
     if title:
-        firstword = re.sub(r"[^A-Za-z0-9]", "", title.split()[0])
+        firstword = re.sub(
+            r"[^A-Za-z0-9]",
+            "",
+            utils.transliterate_for_key(title.split()[0]),
+        )
     key = f"{last}{year}{jabr}{firstword}"
     if key and not key[0].isalpha():
         key = f"k{key}"

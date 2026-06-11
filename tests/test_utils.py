@@ -4,6 +4,7 @@ from bibfixer.utils import (
     normalize_url,
     normalize_keywords,
     normalize_title,
+    transliterate_for_key,
 )
 
 
@@ -50,6 +51,13 @@ def test_normalize_unicode_and_url_and_keywords():
     assert normalize_keywords("Physics, Chemistry,  math ") == "physics,chemistry,math"
     assert normalize_keywords("   ") is None
     assert normalize_keywords(None) is None
+
+
+def test_transliterate_for_key():
+    assert transliterate_for_key("Álvarez") == "Alvarez"
+    assert transliterate_for_key("Müller") == "Muller"
+    assert transliterate_for_key("café") == "cafe"
+    assert transliterate_for_key("") == ""
 
 
 def test_normalize_title_function():
