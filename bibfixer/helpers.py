@@ -126,6 +126,23 @@ def extract_citations_from_tex(tex_file: Path) -> Set[str]:
     return normalized
 
 
+def compose_key_mappings(*mappings: Mapping[str, str]) -> Dict[str, str]:
+    """Merge key mappings while preserving transitive renames.
+
+    If sanitize maps ``https://doi.org/...`` → ``https:doiorg...`` and
+    standardize maps ``https:doiorg...`` → ``Levine2025The``, the composed map
+    must still rewrite the original ``\\cite{https://doi.org/...}`` command.
+    """
+    composed: Dict[str, str] = {}
+    for mapping in mappings:
+        for old, new in mapping.items():
+            composed[old] = new
+        for start, mid in list(composed.items()):
+            if mid in mapping:
+                composed[start] = mapping[mid]
+    return composed
+
+
 def update_tex_citations(tex_files: Iterable[Path],
                          key_mapping: Mapping[str, str], logger: RunLogger | None = None) -> int:
     """Rewrite citation keys in a collection of ``.tex`` files.
@@ -248,6 +265,50 @@ def _generate_citation_key(entry: dict) -> str:
     if key and not key[0].isalpha():
         key = f"k{key}"
     return key
+
+
+def reconcile_bib_keys_with_tex_citations(
+    bib_files: Iterable[Path],
+    tex_files: Iterable[Path] | None = None,
+) -> Dict[str, str]:
+    """Align bib entry keys with ``\\cite{}`` keys when they differ only by case.
+
+    Without this step, ``remove_unused_entries`` can delete entries that are
+    cited in the ``.tex`` file under a different casing (e.g. ``lvarezmoreno2014``
+    vs ``lvarezMoreno2014``).
+    """
+    if tex_files is None:
+        tex_files = collect_all_tex_files()
+
+    cited_lower_to_preferred: Dict[str, str] = {}
+    for tex in tex_files:
+        for key in extract_citations_from_tex(tex):
+            lower = key.lower()
+            if lower not in cited_lower_to_preferred:
+                cited_lower_to_preferred[lower] = key
+
+    if not cited_lower_to_preferred:
+        return {}
+
+    key_mapping: Dict[str, str] = {}
+    for bib in bib_files:
+        bib_database = parse_bibtex_file(bib)
+        if not bib_database:
+            continue
+        modified = False
+        for entry in bib_database.entries:
+            original = utils.normalize_unicode(entry.get('ID', ''))
+            if not original:
+                continue
+            lower = original.lower()
+            preferred = cited_lower_to_preferred.get(lower)
+            if preferred and preferred != original:
+                entry['ID'] = preferred
+                key_mapping[original] = preferred
+                modified = True
+        if modified:
+            write_bib_file(bib, bib_database)
+    return key_mapping
 
 
 def standardize_citation_keys(bib_file: Path, logger: RunLogger | None = None) -> Dict[str, str]:

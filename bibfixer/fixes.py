@@ -33,6 +33,56 @@ MONTH_MAP = {
     'dec': '12', 'december': '12',
 }
 
+SMART_QUOTE_MAP = {
+    '\u201c': '"',
+    '\u201d': '"',
+    '\u2018': "'",
+    '\u2019': "'",
+    '\u201a': "'",
+    '\u201e': '"',
+}
+
+UNICODE_DASH_CHARS = (
+    '\u2010', '\u2011', '\u2012', '\u2013', '\u2014', '\u2015', '\u2500',
+)
+
+# Invalid BibTeX/LaTeX accent shorthands produced by some metadata sources.
+# These are not valid LaTeX commands and break Overleaf/pdfLaTeX builds.
+ACCENT_SHORTHAND_MAP: list[tuple[str, str]] = [
+    ('Andr\\es', r"Andr{\'e}s"),
+    ('Andr\\e ', r"Andr{\'e} "),
+    ('Al\\an', r"Al{\'a}n"),
+    ('Jos\\e ', r"Jos{\'e} "),
+    ('H\\ector', r"H{\'e}ctor"),
+    ('Cl\\emence', r"Cl{\'e}mence"),
+    ('P\\eter', r"P{\'e}ter"),
+    ('P\\al ', r"P{\'a}l "),
+    ('J\\anos', r"J{\'a}nos"),
+    ('Ad\\am', r"Ad{\'a}m"),
+    ('Cs\\anyi', r"Cs{\'a}nyi"),
+    ('G\\bor', r"G{\'a}bor"),
+    ('F\\elix', r"F{\'e}lix"),
+    ('Szilv\\asi', r"Szilv{\'a}si"),
+    ('Th\\eophile', r"Th{\'e}ophile"),
+]
+
+UNICODE_LATEX_MAP: dict[str, str] = {
+    'á': r"{\'a}", 'à': r"{\`a}", 'â': r"{\^a}", 'ä': r'{\"a}', 'ã': r"{\~a}",
+    'é': r"{\'e}", 'è': r"{\`e}", 'ê': r"{\^e}", 'ë': r'{\"e}',
+    'í': r"{\'i}", 'ì': r"{\`i}", 'î': r"{\^i}", 'ï': r'{\"i}',
+    'ó': r"{\'o}", 'ò': r"{\`o}", 'ô': r"{\^o}", 'ö': r'{\"o}', 'õ': r"{\~o}",
+    'ú': r"{\'u}", 'ù': r"{\`u}", 'û': r"{\^u}", 'ü': r'{\"u}',
+    'ñ': r"{\~n}", 'ç': r"{\c{c}}", 'ł': r'{\\l}', 'Ł': r'{\\L}',
+    'ø': r'{\o}', 'Ø': r'{\O}', 'æ': r'{\ae}', 'Æ': r'{\AE}',
+    'ß': r'{\ss}', 'ı': r'{\i}', 'ğ': r"{\u{g}}",
+    'Á': r"{\'A}", 'É': r"{\'E}", 'Í': r"{\'I}", 'Ó': r"{\'O}", 'Ú': r"{\'U}",
+    'Ñ': r"{\~N}", 'Ü': r'{\"U}', 'Ö': r'{\"O}', 'Ä': r'{\"A}',
+    'ć': r"{\'c}", 'ś': r"{\'s}", 'ź': r"{\'z}", 'ą': r"{\k{a}}", 'ę': r"{\k{e}}",
+    'ň': r"{\v{n}}", 'ř': r"{\v{r}}", 'č': r"{\v{c}}", 'š': r"{\v{s}}", 'ž': r"{\v{z}}",
+}
+
+LATEX_TEXT_FIELDS = ('author', 'title', 'journal', 'booktitle', 'editor')
+
 
 def fix_invalid_utf8_bytes(bib_file: Path) -> int:
     """Fix invalid UTF-8 byte sequences that cause LaTeX compilation errors.
@@ -491,6 +541,122 @@ def fix_legacy_year_fields(bib_file: Path) -> int:
     return fixed_count
 
 
+def fix_legacy_month_fields_text(bib_file: Path) -> int:
+    """Fix unquoted month names in raw text before BibTeX parsing.
+
+    Crossref exports often use ``month = July,`` which bibtexparser treats as
+    an undefined string macro and refuses to parse.  This text-level fix runs
+    safely before any parser invocation.
+    """
+    try:
+        content = bib_file.read_text(encoding='utf-8')
+    except Exception as exc:
+        print(f"  Error reading {bib_file}: {exc}")
+        return 0
+
+    fixed_count = 0
+
+    def repl(match: re.Match[str]) -> str:
+        nonlocal fixed_count
+        name = match.group(1).strip().rstrip(',')
+        key = name.lower()
+        if key in MONTH_MAP:
+            fixed_count += 1
+            return f"month = {{{MONTH_MAP[key]}}}"
+        return match.group(0)
+
+    new_content = re.sub(r'month\s*=\s*(\w+)\s*,?', repl, content)
+    if fixed_count:
+        bib_file.write_text(new_content, encoding='utf-8')
+        print(f"  Fixed {fixed_count} unquoted month field(s) (text pass)")
+    return fixed_count
+
+
+def fix_latex_unsafe_characters(bib_file: Path) -> int:
+    r"""Normalize characters that commonly break pdfLaTeX / Overleaf builds.
+
+    Handles smart quotes, unicode dashes, invalid accent shorthands, fragile
+    ``{\l}`` patterns, double-backslash corruption, and bare ``&`` in fields.
+    """
+    try:
+        content = bib_file.read_text(encoding='utf-8')
+    except Exception as exc:
+        print(f"  Error reading {bib_file}: {exc}")
+        return 0
+
+    original = content
+    fixed_count = 0
+
+    for old, new in SMART_QUOTE_MAP.items():
+        if old in content:
+            count = content.count(old)
+            content = content.replace(old, new)
+            fixed_count += count
+
+    for dash in UNICODE_DASH_CHARS:
+        if dash in content:
+            count = content.count(dash)
+            content = content.replace(dash, '-')
+            fixed_count += count
+
+    for old, new in ACCENT_SHORTHAND_MAP:
+        if old in content:
+            count = content.count(old)
+            content = content.replace(old, new)
+            fixed_count += count
+
+    invalid_escapes = [
+        (r'\ø', r'{\o}'), (r'\Ø', r'{\O}'),
+        (r'\ł', r'{\\l}'), (r'\Ł', r'{\\L}'),
+    ]
+    for old, new in invalid_escapes:
+        if old in content:
+            count = content.count(old)
+            content = content.replace(old, new)
+            fixed_count += count
+
+    content = re.sub(r'\\\\ł', r'{\\l}', content)
+    content = re.sub(r'\\\\l\{\}', r'{\\l}', content)
+    # ``{\l}`` at the end of a token needs empty braces for BibTeX parsers.
+    content = re.sub(r'(\w)\{\\l\}(?=\s|,|\})', r'\1{\\l{}}', content)
+
+    lines = content.split('\n')
+    out_lines: list[str] = []
+    for line in lines:
+        stripped = line.strip()
+        if '=' in line and '{' in line and '&' in line:
+            match = re.match(r'(\s*\w+\s*=\s*\{)(.*)(\},?\s*)$', line)
+            if match and 'http' not in match.group(2).lower():
+                inner = match.group(2)
+                inner_new = re.sub(r'(?<!\\)&', r'\\&', inner)
+                if inner_new != inner:
+                    fixed_count += inner.count('&') - inner_new.count('&')
+                    line = match.group(1) + inner_new + match.group(3)
+        if any(stripped.startswith(f'{field} =') for field in LATEX_TEXT_FIELDS):
+            new_line = line
+            for char, latex in sorted(UNICODE_LATEX_MAP.items(), key=lambda item: -len(item[0])):
+                if char in new_line:
+                    new_line = new_line.replace(char, latex)
+            if new_line != line:
+                fixed_count += 1
+                line = new_line
+        out_lines.append(line)
+    content = '\n'.join(out_lines)
+
+    if content != original:
+        bib_file.write_text(content, encoding='utf-8')
+        print(f"  Fixed {fixed_count} LaTeX-unsafe character(s)")
+    return fixed_count
+
+
+def preprocess_bib_for_parsing(bib_file: Path) -> int:
+    """Run text-level fixes that must happen before BibTeX parsing."""
+    total = 0
+    total += fix_legacy_month_fields_text(bib_file)
+    total += fix_latex_unsafe_characters(bib_file)
+    return total
+
+
 def fix_legacy_month_fields(bib_file: Path) -> int:
     """Fix legacy month fields by converting abbreviations to integers."""
     bib_database = core.parse_bibtex_file(bib_file)
@@ -657,6 +823,11 @@ def fix_malformed_author_fields(bib_file: Path) -> int:
         }
         for pattern, replacement in accent_fixes.items():
             value = re.sub(pattern, replacement, value)
+        for old, new in ACCENT_SHORTHAND_MAP:
+            if old in value:
+                value = value.replace(old, new)
+        value = re.sub(r'\\\\ł', r'{\\l}', value)
+        value = re.sub(r'(\w)\{\\l\}(?=\s|,|\})', r'\1{\\l{}}', value)
         unicode_to_latex = {
             'ń': r"\\'{n}",
             'á': r"\\'{a}",
@@ -672,6 +843,9 @@ def fix_malformed_author_fields(bib_file: Path) -> int:
             'ź': r"\\'{z}",
             'ą': r"\\'{a}",
             'ę': r"\\'{e}",
+            'ø': r'{\\o}',
+            'Ø': r'{\\O}',
+            'Ł': r'\\L{}',
         }
         for unicode_char, latex_cmd in unicode_to_latex.items():
             if unicode_char in value:

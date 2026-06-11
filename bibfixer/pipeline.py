@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import helpers
-from .curate import curate_bibliography
+from .curate import curate_bibliography, preprocess_bibliography
 from .runlog import RunLogger
 from .validation import validate_bibliography
 
@@ -33,6 +33,7 @@ def run_pipeline(action: str, options: PipelineOptions, bib_files: list[Path]) -
     """Run the canonical plan for validate/curate/polish."""
     logger = RunLogger(action=action)
     if action == "validate":
+        preprocess_bibliography(bib_files)
         logger.start_phase("validate", "Validation")
         valid = validate_bibliography(logger=logger)
         logger.end_phase("validate")
@@ -52,6 +53,7 @@ def run_pipeline(action: str, options: PipelineOptions, bib_files: list[Path]) -
         logger.render_final_summary()
         return PipelineResult(success=True)
 
+    preprocess_bibliography(bib_files)
     logger.start_phase("validate_pre", "Initial validation")
     validation_pre_ok = validate_bibliography(logger=logger)
     logger.end_phase("validate_pre")

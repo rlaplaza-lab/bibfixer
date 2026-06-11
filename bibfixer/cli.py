@@ -30,8 +30,10 @@ from .curate import (  # noqa: F401
     process_bib_file,
     curate_bibliography,
     remove_duplicate_entries_across_files,
+    remove_duplicate_keys_within_files,
     remove_unused_entries,
     consolidate_duplicate_titles,
+    preprocess_bibliography,
 )
 
 # compatibility helpers that wrap the low-level fixes module
@@ -44,6 +46,9 @@ from .fixes import (  # noqa: F401
     remove_accents_from_names,
     fix_legacy_year_fields,
     fix_legacy_month_fields,
+    fix_legacy_month_fields_text,
+    fix_latex_unsafe_characters,
+    preprocess_bib_for_parsing,
     fix_malformed_author_fields,
 )
 from .validation import (  # noqa: F401
@@ -70,6 +75,8 @@ extract_citations_from_tex = helpers.extract_citations_from_tex
 update_tex_citations = helpers.update_tex_citations
 sanitize_citation_keys = helpers.sanitize_citation_keys
 standardize_citation_keys = helpers.standardize_citation_keys
+reconcile_bib_keys_with_tex_citations = helpers.reconcile_bib_keys_with_tex_citations
+compose_key_mappings = helpers.compose_key_mappings
 
 
 # ==========================================================================

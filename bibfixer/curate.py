@@ -31,11 +31,12 @@ from .fixes import (
     fix_invalid_utf8_bytes,
     fix_html_entities,
     fix_malformed_author_fields,
-    remove_accents_from_names,
     fix_problematic_unicode,
     fix_unescaped_percent,
     fix_legacy_year_fields,
     fix_legacy_month_fields,
+    fix_latex_unsafe_characters,
+    preprocess_bib_for_parsing,
     uncomment_bibtex_entries,
 )
 from .validation import (
@@ -552,7 +553,7 @@ def _apply_basic_fixes(bib_file: Path) -> None:
     fix_invalid_utf8_bytes(bib_file)
     fix_html_entities(bib_file)
     fix_malformed_author_fields(bib_file)
-    remove_accents_from_names(bib_file)
+    fix_latex_unsafe_characters(bib_file)
     fix_problematic_unicode(bib_file)
     # abbreviate journal titles before other formatting; the mapping is
     # intentionally small but ensures the feature is exercised by tests.
@@ -581,6 +582,7 @@ def process_bib_file(
     _emit_info(logger, f"\nProcessing {bib_file.name}...")
     if create_backups:
         create_backup(bib_file, logger=logger)
+    preprocess_bib_for_parsing(bib_file)
     if use_metadata_update:
         update_with_metadata(bib_file, logger=logger)
         apply_journal_abbreviations(bib_file, logger=logger)
@@ -683,6 +685,40 @@ def remove_duplicate_entries_across_files(bib_files: Iterable[Path]) -> int:
     return removed
 
 
+def remove_duplicate_keys_within_files(bib_files: Iterable[Path]) -> int:
+    """Drop duplicate entries that share the same key within one bib file."""
+    removed = 0
+    for bib in bib_files:
+        db = core.parse_bibtex_file(bib)
+        if not db:
+            continue
+        seen: dict[str, int] = {}
+        to_delete: list[int] = []
+        for idx, entry in enumerate(db.entries):
+            key = entry.get('ID', '')
+            if not key:
+                continue
+            if key not in seen:
+                seen[key] = idx
+                continue
+            prev_idx = seen[key]
+            prev_entry = db.entries[prev_idx]
+            if choose_best_entry([(bib, prev_entry), (bib, entry)]) is entry:
+                to_delete.append(prev_idx)
+                seen[key] = idx
+            else:
+                to_delete.append(idx)
+        for idx in reversed(sorted(to_delete)):
+            del db.entries[idx]
+            removed += 1
+        if to_delete:
+            core.write_bib_file(bib, db)
+            print(f"  {bib.name}: removed {len(to_delete)} duplicate key(s)")
+    if removed:
+        print(f"  Total duplicate keys removed: {removed}")
+    return removed
+
+
 def remove_unused_entries(bib_files: Iterable[Path]) -> int:
     """Delete entries that are not cited anywhere (crossrefs are preserved)."""
     tex_files = helpers.collect_all_tex_files()
@@ -726,6 +762,14 @@ def remove_unused_entries(bib_files: Iterable[Path]) -> int:
     return removed
 
 
+def preprocess_bibliography(bib_files: Iterable[Path]) -> int:
+    """Run text-level fixes on all bib files so parsers can load them."""
+    total = 0
+    for bib in bib_files:
+        total += preprocess_bib_for_parsing(bib)
+    return total
+
+
 def curate_bibliography(
     bib_files: Iterable[Path],
     create_backups: bool = True,
@@ -741,8 +785,12 @@ def curate_bibliography(
     _emit_info(logger, "BibTeX Curation")
     _emit_info(logger, "=" * 70)
 
+    bib_list = list(bib_files)
+    for bib in bib_list:
+        preprocess_bib_for_parsing(bib)
+
     # process each file individually
-    for bib in bib_files:
+    for bib in bib_list:
         process_bib_file(
             bib,
             create_backups=create_backups,
@@ -750,51 +798,57 @@ def curate_bibliography(
             logger=logger,
         )
 
-    # key harmonization phase
+    tex_files = helpers.collect_all_tex_files()
+
+    reconcile_map = helpers.reconcile_bib_keys_with_tex_citations(bib_list, tex_files)
+    if reconcile_map:
+        helpers.update_tex_citations(tex_files, reconcile_map, logger=logger)
+
     if not preserve_keys:
-        all_mappings: dict[str, str] = {}
-        for bib in bib_files:
-            all_mappings.update(helpers.sanitize_citation_keys(bib, logger=logger))
-        texs = helpers.collect_all_tex_files()
+        sanitize_maps: list[dict[str, str]] = []
+        for bib in bib_list:
+            sanitize_maps.append(helpers.sanitize_citation_keys(bib, logger=logger))
+        texs = tex_files or helpers.collect_all_tex_files()
+        standardize_maps: list[dict[str, str]] = []
         if any(t.name == 'main.tex' for t in texs):
             _emit_info(logger, "\nKey standardization will run (main.tex present)")
-            for bib in bib_files:
-                all_mappings.update(helpers.standardize_citation_keys(bib, logger=logger))
+            for bib in bib_list:
+                standardize_maps.append(helpers.standardize_citation_keys(bib, logger=logger))
         else:
             _emit_info(logger, "\nSkipping citation key standardization (no main.tex found)")
+        all_mappings = helpers.compose_key_mappings(*sanitize_maps, *standardize_maps)
         if all_mappings:
             helpers.update_tex_citations(texs, all_mappings, logger=logger)
             if logger:
                 logger.counter("citation_key_rewrites", len(all_mappings))
 
-    # remove unused entries only if there are tex files to validate against
-    tex_files = helpers.collect_all_tex_files()
     if tex_files:
-        removed = remove_unused_entries(bib_files)
+        removed = remove_unused_entries(bib_list)
         if logger:
             logger.counter("unused_entries_removed", removed)
 
-    # deduplicate and sync remaining entries
-    dup = find_duplicates(bib_files)
-    synchronize_duplicates(bib_files, dup)
+    remove_duplicate_keys_within_files(bib_list)
+
+    dup = find_duplicates(bib_list)
+    synchronize_duplicates(bib_list, dup)
     if logger and dup:
         logger.counter("duplicate_key_groups", len(dup))
 
     if not preserve_keys:
-        doi_dup = find_duplicate_dois(bib_files)
-        doi_map = consolidate_duplicate_dois(bib_files, doi_dup)
+        doi_dup = find_duplicate_dois(bib_list)
+        doi_map = consolidate_duplicate_dois(bib_list, doi_dup)
         if doi_map:
             helpers.update_tex_citations(helpers.collect_all_tex_files(), doi_map, logger=logger)
             if logger:
                 logger.counter("doi_consolidated_keys", len(doi_map))
-        title_map = consolidate_duplicate_titles(bib_files)
+        title_map = consolidate_duplicate_titles(bib_list)
         if title_map:
             helpers.update_tex_citations(helpers.collect_all_tex_files(), title_map, logger=logger)
             if logger:
                 logger.counter("title_consolidated_keys", len(title_map))
+        remove_duplicate_keys_within_files(bib_list)
 
-    # final validation/report
-    generate_report(bib_files)
+    generate_report(bib_list)
 
     _emit_info(logger, "\nCuration complete!")
 
