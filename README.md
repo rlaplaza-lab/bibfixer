@@ -97,9 +97,15 @@ vulture bibfixer tests bibfixer.py --min-confidence 80
 pytest
 ```
 
-The core library requires `bibtexparser` and `iso4`. Bibliography metadata
-update, abbreviation, and formatting operations are implemented in-process
-within `bibfixer`.
+The core library requires `bibtexparser` and `iso4`, and it supports Python
+3.9, 3.10, and 3.11. Bibliography metadata update, abbreviation, and
+formatting operations are implemented in-process within `bibfixer`.
+
+GitHub Actions runs on Ubuntu 24.04. The current `ubuntu-latest` image is
+Ubuntu 26.04, which does not publish a Python 3.9 build, so the workflow
+pins 24.04 to keep that version in the test matrix. Lint (ruff, mypy, and
+vulture) runs on Python 3.11. Tests run on 3.9, 3.10, and 3.11. The MCP
+extra is installed only on 3.10 and 3.11.
 
 During curation, bibfixer performs internal metadata update/DOI fallback,
 journal abbreviation, and formatting passes without requiring external helper
@@ -120,13 +126,14 @@ After installing the package you can call the CLI directly:
 ```bash
 bibfixer --help
 ```
+
 ## Packaging and distribution
 
 A `pyproject.toml` is provided so the library can be built with `build` or
-installed via `pip install .`.  Before a release:
+installed via `pip install .`. The current release is 0.2.0. Before a release:
 
 1. Bump the version in `bibfixer/__init__.py` and `pyproject.toml`.
-2. Add release notes or changelog entries.
+2. Add a changelog entry below.
 3. Build wheel and sdist (`python -m build`).
 4. Upload to PyPI with `twine`.
 
@@ -137,4 +144,15 @@ For professional distribution you may also want to:
 * Add `setup.cfg` or other configuration files for tooling such as
   `coverage`, `flake8`, etc.
 * Tag releases and maintain a changelog.
+
+## Changelog
+
+### 0.2.0
+
+* Add ruff, mypy, and vulture checks, and run them in GitHub Actions on
+  Ubuntu 24.04.
+* Add an MCP server and `bibfixer.agent.run_references` so agents can
+  validate, curate, and polish bibliographies without an interactive prompt.
+* Add `AGENTS.md` with the project layout and the commands those agents
+  should use.
 

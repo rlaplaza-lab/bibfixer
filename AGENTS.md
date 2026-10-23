@@ -42,7 +42,9 @@ vulture bibfixer tests bibfixer.py --min-confidence 80
 pytest -q tests
 ```
 
-The core package supports Python 3.9. The MCP extra needs Python 3.10+:
+The core package supports Python 3.9, 3.10, and 3.11. CI runs on Ubuntu 24.04
+because Ubuntu 26.04 does not provide Python 3.9; keep that runner pin. The
+MCP extra needs Python 3.10+:
 
 ```bash
 python -m pip install -e ".[mcp]"
