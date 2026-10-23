@@ -2,10 +2,14 @@
 
 __version__ = "0.1.8"
 
-from .core import BibFile, parse_bib_file, parse_bibtex_file, write_bib_file
 from . import helpers
+from .core import BibFile, parse_bib_file, parse_bibtex_file, write_bib_file
 
 __all__ = [
-    "__version__", "BibFile", "parse_bib_file", "parse_bibtex_file", "write_bib_file",
+    "BibFile",
+    "__version__",
     "helpers",
+    "parse_bib_file",
+    "parse_bibtex_file",
+    "write_bib_file",
 ]

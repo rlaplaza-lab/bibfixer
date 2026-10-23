@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import unicodedata
 import re
-from typing import Any, Mapping, Optional
-
+import unicodedata
+from collections.abc import Mapping
+from typing import Any
 
 _DOI_URL_PATTERN = re.compile(
     r"(?:https?://)?(?:dx\.)?doi\.org/([^\s?#}]+)",
@@ -17,7 +17,7 @@ _ARXIV_ABS_URL_PATTERN = re.compile(
 )
 
 
-def normalize_unicode(text: Optional[str]) -> Optional[str]:
+def normalize_unicode(text: str | None) -> str | None:
     """Normalize Unicode strings for comparison.
 
     Returns ``None`` for falsy input to make caller logic simpler.
@@ -27,7 +27,7 @@ def normalize_unicode(text: Optional[str]) -> Optional[str]:
     return unicodedata.normalize("NFC", str(text))
 
 
-def normalize_citation_key(key: Optional[str]) -> Optional[str]:
+def normalize_citation_key(key: str | None) -> str | None:
     """Normalize citation keys for case-insensitive matching."""
     normalized = normalize_unicode(key)
     if not normalized:
@@ -38,7 +38,7 @@ def normalize_citation_key(key: Optional[str]) -> Optional[str]:
     return compact.casefold()
 
 
-def normalize_doi(doi: Optional[str]) -> Optional[str]:
+def normalize_doi(doi: str | None) -> str | None:
     """Normalize DOI strings to a canonical lowercase form without prefix."""
     if not doi:
         return None
@@ -46,17 +46,13 @@ def normalize_doi(doi: Optional[str]) -> Optional[str]:
     if not doi:
         # whitespace-only input should be treated as empty
         return None
-    if doi.startswith("doi:"):
-        doi = doi[4:]
-    if doi.startswith("http://dx.doi.org/"):
-        # prefix length is 18 characters, not 19; avoid dropping the leading digit
-        doi = doi[18:]
-    if doi.startswith("https://doi.org/"):
-        doi = doi[16:]
+    doi = doi.removeprefix("doi:")
+    doi = doi.removeprefix("http://dx.doi.org/")
+    doi = doi.removeprefix("https://doi.org/")
     return doi.strip()
 
 
-def extract_entry_doi(entry: Mapping[str, Any]) -> Optional[str]:
+def extract_entry_doi(entry: Mapping[str, Any]) -> str | None:
     """Return a normalized DOI from entry fields or resolvable identifier URLs."""
     for key in ("doi", "DOI", "Doi"):
         normalized = normalize_doi(entry.get(key))
@@ -86,7 +82,7 @@ def extract_entry_doi(entry: Mapping[str, Any]) -> Optional[str]:
     return None
 
 
-def normalize_url(url: Optional[str]) -> Optional[str]:
+def normalize_url(url: str | None) -> str | None:
     """Basic URL cleaning: strip whitespace and lower-case scheme."""
     if not url:
         return None
@@ -95,7 +91,7 @@ def normalize_url(url: Optional[str]) -> Optional[str]:
     return re.sub(r"^[A-Za-z]+://", lambda m: m.group(0).lower(), url)
 
 
-def normalize_keywords(keywords: Optional[str]) -> Optional[str]:
+def normalize_keywords(keywords: str | None) -> str | None:
     """Canonicalise a comma-separated keyword list.
 
     - split on commas

@@ -1,10 +1,10 @@
 
 from bibfixer.core import (
-    walk_fields,
+    BibFile,
     field_transform,
     parse_bib_file,
+    walk_fields,
     write_bib_file,
-    BibFile,
 )
 
 

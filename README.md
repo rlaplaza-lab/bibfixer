@@ -74,15 +74,26 @@ bibfixer uses two separate strategies that are both Overleaf-safe:
 
 ---
 
+## Agents
+
+[`AGENTS.md`](AGENTS.md) is the short guide for coding agents. The same workflows are available as MCP tools (`validate_references`, `curate_references`, `polish_references`) after installing the optional extra on Python 3.10+:
+
+```bash
+pip install -e ".[mcp]"
+python -m bibfixer.mcp
+```
+
+A Cursor project config is in [`.cursor/mcp.json`](.cursor/mcp.json). Point `project_dir` at the LaTeX project root. `polish_references` is the tool that fixes references; it rewrites files and keeps `.backup` copies.
 
 ## Development
 
 Run the tests and linting tools with:
 
 ```bash
-python -m pip install -e .[test]
+python -m pip install -e ".[test]"
 ruff check .
-mypy .
+mypy bibfixer
+vulture bibfixer tests bibfixer.py --min-confidence 80
 pytest
 ```
 
@@ -123,8 +134,6 @@ For professional distribution you may also want to:
 
 * Publish the source on GitHub with a liberal open source license (MIT, BSD,
   etc.).
-* Configure CI (GitHub Actions, GitLab CI) to run ruff/mypy/pytest on push and
-  pull requests.
 * Add `setup.cfg` or other configuration files for tooling such as
   `coverage`, `flake8`, etc.
 * Tag releases and maintain a changelog.

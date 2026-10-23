@@ -11,34 +11,35 @@ The public API is intentionally minimal; callers usually invoke
 
 from __future__ import annotations
 
-import shutil
-import re
+import contextlib
 import os
-import tempfile
+import re
+import shutil
 from collections import defaultdict
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable, Any
+from typing import Any
 
-from . import core, utils, helpers
-from .core import FIELDS_TO_REMOVE
-from .runlog import RunLogger
-from ._internal import metadata as internal_metadata
+from . import core, helpers, utils
 from ._internal import formatter as internal_formatter
+from ._internal import metadata as internal_metadata
+from .core import FIELDS_TO_REMOVE
 
 # import frequently used fix routines at module level for simplicity
 from .fixes import (
     abbreviate_journal_names,
-    fix_invalid_utf8_bytes,
     fix_html_entities,
+    fix_invalid_utf8_bytes,
+    fix_latex_unsafe_characters,
+    fix_legacy_month_fields,
+    fix_legacy_year_fields,
     fix_malformed_author_fields,
     fix_problematic_unicode,
     fix_unescaped_percent,
-    fix_legacy_year_fields,
-    fix_legacy_month_fields,
-    fix_latex_unsafe_characters,
     preprocess_bib_for_parsing,
     uncomment_bibtex_entries,
 )
+from .runlog import RunLogger
 from .validation import (
     generate_report,
     get_fields_to_enrich,
@@ -46,6 +47,7 @@ from .validation import (
     get_required_field_groups,
     is_missing_field,
 )
+
 
 def _emit_info(logger: RunLogger | None, message: str) -> None:
     if logger:
@@ -87,25 +89,6 @@ def _required_group_label(group: tuple[str, ...]) -> str:
     return "/".join(group)
 
 
-def _parse_single_entry_bibtex(raw_bibtex: str) -> dict[str, Any] | None:
-    """Parse one-entry bibtex text and return the entry dict."""
-    with tempfile.NamedTemporaryFile("w+", suffix=".bib", delete=False, encoding="utf-8") as tmp:
-        tmp.write(raw_bibtex)
-        tmp_path = Path(tmp.name)
-    try:
-        db = core.parse_bibtex_file(tmp_path)
-    except Exception:
-        return None
-    finally:
-        try:
-            tmp_path.unlink()
-        except Exception:
-            pass
-    if not db or not db.entries:
-        return None
-    return db.entries[0]
-
-
 def _fill_stub_entries_from_doi(bib_file: Path) -> int:
     """Replace DOI stubs using the internal DOI metadata provider."""
     db = core.parse_bibtex_file(bib_file)
@@ -122,7 +105,7 @@ def _fill_stub_entries_from_doi(bib_file: Path) -> int:
         fetched_raw = internal_metadata.doi_to_bibtex(doi)
         if not fetched_raw or not fetched_raw.strip():
             continue
-        fetched = _parse_single_entry_bibtex(fetched_raw)
+        fetched = internal_metadata._parse_single_entry_bibtex(fetched_raw)
         if not fetched:
             continue
         fetched = internal_metadata.supplement_fetched_metadata(doi, fetched)
@@ -158,7 +141,7 @@ def _enrich_partial_entries_from_doi(bib_file: Path) -> int:
         fetched_raw = internal_metadata.doi_to_bibtex(doi)
         if not fetched_raw or not fetched_raw.strip():
             continue
-        fetched = _parse_single_entry_bibtex(fetched_raw)
+        fetched = internal_metadata._parse_single_entry_bibtex(fetched_raw)
         if not fetched:
             continue
         fetched = internal_metadata.supplement_fetched_metadata(doi, fetched, entry=entry)
@@ -266,7 +249,7 @@ def update_with_metadata(bib_file: Path, logger: RunLogger | None = None) -> Non
 
     try:
         internal_metadata.update_entries(bib_file)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — any metadata failure restores the backup
         _emit_info(logger, f"  Warning: metadata update failed: {exc}")
         backup_text = backup_path.read_text(encoding="utf-8")
         bib_file.write_text(backup_text, encoding="utf-8")
@@ -291,10 +274,8 @@ def update_with_metadata(bib_file: Path, logger: RunLogger | None = None) -> Non
                     return
 
     # remove the temporary backup if everything looks sane
-    try:
+    with contextlib.suppress(OSError):
         backup_path.unlink()
-    except Exception:  # best-effort cleanup only
-        pass
 
     # some entries may get commented-out; let the shared helper deal with it.
     uncomment_bibtex_entries(bib_file)
@@ -318,7 +299,7 @@ def apply_journal_abbreviations(bib_file: Path, logger: RunLogger | None = None)
     _emit_info(logger, "  Applying journal abbreviations...")
     try:
         internal_metadata.abbreviate_journals(bib_file)
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 — abbreviation failures are reported, not fatal
         _emit_info(logger, f"  Warning: journal abbreviation failed: {exc}")
         return
 
@@ -337,35 +318,32 @@ def format_bibliography_file(bib_file: Path, logger: RunLogger | None = None) ->
     # keep both the raw text and the parsed database so we can
     # intelligently detect title/DOI changes later.
     try:
-        before = bib_file.read_text(encoding='utf-8')
-    except Exception:
+        before = bib_file.read_text(encoding="utf-8")
+    except OSError:
         before = None
     try:
         before_db = core.parse_bibtex_file(bib_file)
-    except Exception:
+    except RuntimeError:
         before_db = None
 
     try:
         internal_formatter.format_bibliography(
             bib_file,
             drop_fields=FIELDS_TO_REMOVE,
-            indent=2,
-            align=14,
-            dangling="braces",
         )
-    except Exception as exc:  # pragma: no cover
+    except Exception as exc:  # pragma: no cover  # noqa: BLE001 — formatter failures are reported, not fatal
         _emit_info(logger, f"  Warning: formatter failed: {exc}")
         return
     _emit_info(logger, "  Formatting completed")
 
     # parse the after state so we can look for actual field-level changes
     try:
-        after = bib_file.read_text(encoding='utf-8')
-    except Exception:
+        after = bib_file.read_text(encoding="utf-8")
+    except OSError:
         after = None
     try:
         after_db = core.parse_bibtex_file(bib_file)
-    except Exception:
+    except RuntimeError:
         after_db = None
 
     if before_db and after_db:
@@ -694,7 +672,7 @@ def remove_duplicate_keys_within_files(bib_files: Iterable[Path]) -> int:
                 seen[key] = idx
             else:
                 to_delete.append(idx)
-        for idx in reversed(sorted(to_delete)):
+        for idx in sorted(to_delete, reverse=True):
             del db.entries[idx]
             removed += 1
         if to_delete:

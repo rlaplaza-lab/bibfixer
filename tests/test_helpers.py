@@ -39,9 +39,9 @@ def test_collect_all_files(tmp_path, monkeypatch):
     rootbib.write_text("")
     monkeypatch.chdir(tmp_path)
     tex_files = helpers.collect_all_tex_files()
-    assert set(p.name for p in tex_files) == {"sec.tex", "main.tex"}
+    assert {p.name for p in tex_files} == {"sec.tex", "main.tex"}
     bib_files = helpers.collect_all_bib_files()
-    assert set(p.name for p in bib_files) == {"sec.bib", "references.bib"}
+    assert {p.name for p in bib_files} == {"sec.bib", "references.bib"}
 
 
 def test_extract_and_update_citations(tmp_path):
@@ -125,7 +125,7 @@ def test_generate_and_standardize_keys(tmp_path):
     assert all(k.startswith("Smith2021J") for k in mapping.values())
     content = bib.read_text()
     # ensure two different keys exist in file
-    keys = set(m.group(1) for m in re.finditer(r"@\w+\{([^,]+)", content))
+    keys = {m.group(1) for m in re.finditer(r"@\w+\{([^,]+)", content)}
     assert len(keys) == 2
 
 

@@ -14,8 +14,9 @@ import unicodedata
 from pathlib import Path
 from typing import Any
 
-from . import core
+import iso4
 
+from . import core
 
 # month abbreviation to integer mapping (shared by fix_legacy_month_fields)
 MONTH_MAP = {
@@ -96,7 +97,7 @@ def fix_invalid_utf8_bytes(bib_file: Path) -> int:
         # Read as binary to detect and fix byte-level issues
         with open(bib_file, 'rb') as f:
             raw_content = f.read()
-    except Exception as e:
+    except OSError as e:
         print(f"  Error reading {bib_file}: {e}")
         return 0
 
@@ -154,7 +155,7 @@ def fix_invalid_utf8_bytes(bib_file: Path) -> int:
                 f.write(content)
             print(f"  Fixed {fixed_count} invalid UTF-8 byte sequence(s)")
             return fixed_count
-        except Exception as e:
+        except OSError as e:
             print(f"  Error writing {bib_file}: {e}")
             return 0
     return 0
@@ -171,7 +172,7 @@ def fix_problematic_unicode(bib_file: Path) -> int:
     try:
         with open(bib_file, 'r', encoding='utf-8', errors='replace') as f:
             content = f.read()
-    except Exception as e:
+    except OSError as e:
         print(f"  Error reading {bib_file}: {e}")
         return 0
 
@@ -190,7 +191,7 @@ def fix_problematic_unicode(bib_file: Path) -> int:
             fixed_count += 1
             modified = True
         if '\u0301' in new_line:
-            def replace_accent(match):
+            def replace_accent(match: re.Match[str]) -> str:
                 char = match.group(1)
                 if char.isalpha():
                     return f"{{\\'{char}}}"
@@ -209,7 +210,7 @@ def fix_problematic_unicode(bib_file: Path) -> int:
             with open(bib_file, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(lines))
             print(f"  Fixed {fixed_count} problematic Unicode character(s)")
-        except Exception as e:
+        except OSError as e:
             print(f"  Error writing {bib_file}: {e}")
             return 0
     return fixed_count
@@ -223,7 +224,7 @@ def fix_html_entities(bib_file: Path) -> int:
     try:
         with open(bib_file, 'r', encoding='utf-8') as f:
             content = f.read()
-    except Exception as e:
+    except OSError as e:
         print(f"  Error reading {bib_file}: {e}")
         return 0
 
@@ -277,7 +278,7 @@ def fix_html_entities(bib_file: Path) -> int:
             with open(bib_file, 'w', encoding='utf-8') as f:
                 f.write(content)
             print(f"  Fixed {fixed_count} HTML entity/entities and unescaped &")
-        except Exception as e:
+        except OSError as e:
             print(f"  Error writing {bib_file}: {e}")
             return 0
         return fixed_count
@@ -397,12 +398,6 @@ def _heuristic_abbrev(journal: str) -> str:
     words = journal.split()
     if len(words) < 2:
         return journal
-
-    # iso4 is guaranteed to be present via packaging dependencies
-    # iso4 is a runtime dependency; mypy reports it as untyped so silence
-    # the complaint here.  the import is intentionally local to defer the
-    # dependency until needed.
-    import iso4  # type: ignore[import]
 
     abbrev = iso4.abbreviate(journal)
     return abbrev if abbrev and abbrev != journal else journal
@@ -529,7 +524,6 @@ def fix_legacy_year_fields(bib_file: Path) -> int:
                 continue
             except ValueError:
                 pass
-            import re
             date_match = re.match(r'^(\d{4})[-/]', year_clean)
             if date_match:
                 year_only = date_match.group(1)
@@ -550,7 +544,7 @@ def fix_legacy_month_fields_text(bib_file: Path) -> int:
     """
     try:
         content = bib_file.read_text(encoding='utf-8')
-    except Exception as exc:
+    except OSError as exc:
         print(f"  Error reading {bib_file}: {exc}")
         return 0
 
@@ -580,7 +574,7 @@ def fix_latex_unsafe_characters(bib_file: Path) -> int:
     """
     try:
         content = bib_file.read_text(encoding='utf-8')
-    except Exception as exc:
+    except OSError as exc:
         print(f"  Error reading {bib_file}: {exc}")
         return 0
 
@@ -706,7 +700,7 @@ def uncomment_bibtex_entries(bib_file: Path) -> int:
     try:
         with open(bib_file, 'r', encoding='utf-8') as f:
             content = f.read()
-    except Exception as e:
+    except OSError as e:
         print(f"  Error reading {bib_file}: {e}")
         return 0
 
@@ -781,7 +775,7 @@ def uncomment_bibtex_entries(bib_file: Path) -> int:
             with open(bib_file, 'w', encoding='utf-8') as f:
                 f.write('\n'.join(lines))
             print(f"  Uncommented {fixed_count} entry/entries")
-        except Exception as e:
+        except OSError as e:
             print(f"  Error writing {bib_file}: {e}")
             return 0
     return fixed_count

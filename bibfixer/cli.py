@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Command line interface for bibfixer.
 
 This module used to contain nearly two thousand lines of logic; most of the
@@ -14,58 +13,57 @@ from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path  # noqa: F401
 
 from . import helpers
-from .curate import (  # noqa: F401
-    create_backup,
-    update_with_metadata,
-    format_bibliography_file,
-    find_duplicates,
+from .curate import (
     choose_best_entry,
-    synchronize_duplicates,
-    find_duplicate_dois,
     choose_best_key,
     consolidate_duplicate_dois,
-    process_bib_file,
+    consolidate_duplicate_titles,
+    create_backup,
     curate_bibliography,
+    find_duplicate_dois,
+    find_duplicates,
+    format_bibliography_file,
+    preprocess_bibliography,
+    process_bib_file,
     remove_duplicate_entries_across_files,
     remove_duplicate_keys_within_files,
     remove_unused_entries,
-    consolidate_duplicate_titles,
-    preprocess_bibliography,
+    synchronize_duplicates,
+    update_with_metadata,
 )
 
 # compatibility helpers that wrap the low-level fixes module
-from .fixes import (  # noqa: F401
-    fix_invalid_utf8_bytes,
-    fix_problematic_unicode,
+from .fixes import (
     fix_html_entities,
-    fix_unescaped_percent,
-    uncomment_bibtex_entries,
-    remove_accents_from_names,
-    fix_legacy_year_fields,
+    fix_invalid_utf8_bytes,
+    fix_latex_unsafe_characters,
     fix_legacy_month_fields,
     fix_legacy_month_fields_text,
-    fix_latex_unsafe_characters,
-    preprocess_bib_for_parsing,
+    fix_legacy_year_fields,
     fix_malformed_author_fields,
+    fix_problematic_unicode,
+    fix_unescaped_percent,
+    preprocess_bib_for_parsing,
+    remove_accents_from_names,
+    uncomment_bibtex_entries,
 )
-from .validation import (  # noqa: F401
-    validate_citations,
-    validate_bib_file,
-    generate_report,
-    check_duplicate_titles,
-    check_duplicate_keys,
-    check_duplicate_dois,
+from .pipeline import PipelineOptions, resolve_bib_files, run_pipeline
+from .validation import (
     check_bibtex_syntax,
+    check_duplicate_dois,
+    check_duplicate_keys,
+    check_duplicate_titles,
+    check_file_correspondence,
     check_malformed_author_fields,
     check_unescaped_percent,
-    check_file_correspondence,
+    generate_report,
     generate_summary,
+    validate_bib_file,
     validate_bibliography,
+    validate_citations,
 )
-from .pipeline import PipelineOptions, run_pipeline, resolve_bib_files
 
 # helper shortcuts (these used to be defined inline in this module)
 get_corresponding_bib = helpers.get_corresponding_bib
@@ -78,13 +76,64 @@ standardize_citation_keys = helpers.standardize_citation_keys
 reconcile_bib_keys_with_tex_citations = helpers.reconcile_bib_keys_with_tex_citations
 compose_key_mappings = helpers.compose_key_mappings
 
+__all__ = [
+    "PipelineOptions",
+    "check_bibtex_syntax",
+    "check_duplicate_dois",
+    "check_duplicate_keys",
+    "check_duplicate_titles",
+    "check_file_correspondence",
+    "check_malformed_author_fields",
+    "check_unescaped_percent",
+    "choose_best_entry",
+    "choose_best_key",
+    "collect_all_bib_files",
+    "collect_all_tex_files",
+    "compose_key_mappings",
+    "consolidate_duplicate_dois",
+    "consolidate_duplicate_titles",
+    "create_backup",
+    "curate_bibliography",
+    "extract_citations_from_tex",
+    "find_duplicate_dois",
+    "find_duplicates",
+    "fix_html_entities",
+    "fix_invalid_utf8_bytes",
+    "fix_latex_unsafe_characters",
+    "fix_legacy_month_fields",
+    "fix_legacy_month_fields_text",
+    "fix_legacy_year_fields",
+    "fix_malformed_author_fields",
+    "fix_problematic_unicode",
+    "fix_unescaped_percent",
+    "format_bibliography_file",
+    "generate_report",
+    "generate_summary",
+    "get_corresponding_bib",
+    "main",
+    "preprocess_bib_for_parsing",
+    "preprocess_bibliography",
+    "process_bib_file",
+    "reconcile_bib_keys_with_tex_citations",
+    "remove_accents_from_names",
+    "remove_duplicate_entries_across_files",
+    "remove_duplicate_keys_within_files",
+    "remove_unused_entries",
+    "resolve_bib_files",
+    "run_pipeline",
+    "sanitize_citation_keys",
+    "standardize_citation_keys",
+    "synchronize_duplicates",
+    "uncomment_bibtex_entries",
+    "update_tex_citations",
+    "update_with_metadata",
+    "validate_bib_file",
+    "validate_bibliography",
+    "validate_citations",
+]
 
-# ==========================================================================
-# Main Entry Point
-# ==========================================================================
 
-
-def main():
+def main() -> int:
     """Parse command-line arguments and dispatch to the appropriate workflow."""
     parser = argparse.ArgumentParser(
         description='Unified BibTeX bibliography management script',

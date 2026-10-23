@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import Iterable, Mapping, Set, Dict
 import re
+from collections.abc import Iterable, Mapping
+from pathlib import Path
 
 from . import utils
 from .core import parse_bibtex_file, write_bib_file
 from .runlog import RunLogger
-
 
 # common citation patterns used when parsing and rewriting
 # ``.tex`` files.  These were previously hard-coded in two separate
@@ -96,7 +95,7 @@ def collect_all_bib_files() -> list[Path]:
     return sorted(bib_list)
 
 
-def extract_citations_from_tex(tex_file: Path) -> Set[str]:
+def extract_citations_from_tex(tex_file: Path) -> set[str]:
     r"""Extract citation keys from a LaTeX source file.
 
     The implementation is intentionally simple; it looks for a handful of
@@ -104,21 +103,20 @@ def extract_citations_from_tex(tex_file: Path) -> Set[str]:
     keys are normalized with :func:`utils.normalize_unicode`.
     """
     try:
-        with open(tex_file, 'r', encoding='utf-8') as f:
-            content = f.read()
-    except Exception:
+        content = tex_file.read_text(encoding="utf-8")
+    except OSError:
         return set()
 
     # patterns defined at module level to keep behaviour consistent
     patterns = CITATION_PATTERNS
 
-    citations: Set[str] = set()
+    citations: set[str] = set()
     for pattern in patterns:
         for match in re.findall(pattern, content):
             keys = [k.strip() for k in match.split(',')]
             citations.update(keys)
 
-    normalized: Set[str] = set()
+    normalized: set[str] = set()
     for k in citations:
         nk = utils.normalize_unicode(k)
         if nk:
@@ -126,14 +124,14 @@ def extract_citations_from_tex(tex_file: Path) -> Set[str]:
     return normalized
 
 
-def compose_key_mappings(*mappings: Mapping[str, str]) -> Dict[str, str]:
+def compose_key_mappings(*mappings: Mapping[str, str]) -> dict[str, str]:
     """Merge key mappings while preserving transitive renames.
 
     If sanitize maps ``https://doi.org/...`` → ``https:doiorg...`` and
     standardize maps ``https:doiorg...`` → ``Levine2025The``, the composed map
     must still rewrite the original ``\\cite{https://doi.org/...}`` command.
     """
-    composed: Dict[str, str] = {}
+    composed: dict[str, str] = {}
     for mapping in mappings:
         for old, new in mapping.items():
             composed[old] = new
@@ -161,15 +159,16 @@ def update_tex_citations(tex_files: Iterable[Path],
     updated_files = 0
     for tex_file in tex_files:
         try:
-            with open(tex_file, 'r', encoding='utf-8') as f:
-                content = f.read()
-        except Exception:
+            content = tex_file.read_text(encoding="utf-8")
+        except OSError:
+            content = None
+        if content is None:
             continue
 
         original_content = content
         patterns = CITATION_PATTERNS
 
-        def replace_citations(match):
+        def replace_citations(match: re.Match[str]) -> str:
             keys_str = match.group(1)
             keys = [k.strip() for k in keys_str.split(',')]
             updated_keys = []
@@ -204,7 +203,7 @@ def update_tex_citations(tex_files: Iterable[Path],
     return updated_files
 
 
-def sanitize_citation_keys(bib_file: Path, logger: RunLogger | None = None) -> Dict[str, str]:
+def sanitize_citation_keys(bib_file: Path, logger: RunLogger | None = None) -> dict[str, str]:
     """Remove problematic characters from entry keys in *bib_file*.
 
     Returns a mapping from old normalized key to new key.  The file is
@@ -215,7 +214,7 @@ def sanitize_citation_keys(bib_file: Path, logger: RunLogger | None = None) -> D
         return {}
 
     modified = False
-    key_mapping: Dict[str, str] = {}
+    key_mapping: dict[str, str] = {}
     fixed_count = 0
 
     for entry in bib_database.entries:
@@ -278,7 +277,7 @@ def _generate_citation_key(entry: dict) -> str:
 def reconcile_bib_keys_with_tex_citations(
     bib_files: Iterable[Path],
     tex_files: Iterable[Path] | None = None,
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """Align bib entry keys with ``\\cite{}`` keys when they differ only by case.
 
     Without this step, ``remove_unused_entries`` can delete entries that are
@@ -288,7 +287,7 @@ def reconcile_bib_keys_with_tex_citations(
     if tex_files is None:
         tex_files = collect_all_tex_files()
 
-    cited_lower_to_preferred: Dict[str, str] = {}
+    cited_lower_to_preferred: dict[str, str] = {}
     for tex in tex_files:
         for key in extract_citations_from_tex(tex):
             lower = key.lower()
@@ -298,7 +297,7 @@ def reconcile_bib_keys_with_tex_citations(
     if not cited_lower_to_preferred:
         return {}
 
-    key_mapping: Dict[str, str] = {}
+    key_mapping: dict[str, str] = {}
     for bib in bib_files:
         bib_database = parse_bibtex_file(bib)
         if not bib_database:
@@ -319,7 +318,7 @@ def reconcile_bib_keys_with_tex_citations(
     return key_mapping
 
 
-def standardize_citation_keys(bib_file: Path, logger: RunLogger | None = None) -> Dict[str, str]:
+def standardize_citation_keys(bib_file: Path, logger: RunLogger | None = None) -> dict[str, str]:
     """Assign canonical keys and rewrite the file.
 
     New keys follow the pattern: AuthorYearJournalFirstTitleWord.
@@ -330,8 +329,8 @@ def standardize_citation_keys(bib_file: Path, logger: RunLogger | None = None) -
     if not bib_database:
         return {}
 
-    key_mapping: Dict[str, str] = {}
-    used_keys: Set[str] = set()
+    key_mapping: dict[str, str] = {}
+    used_keys: set[str] = set()
 
     for entry in bib_database.entries:
         orig = entry.get('ID', '')

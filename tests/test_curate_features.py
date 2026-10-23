@@ -2,11 +2,10 @@ import io
 import os
 import re
 import sys
-
 from contextlib import redirect_stdout
 
 import iso4
-
+import pytest
 from bibfixer._internal import metadata as internal_metadata
 from bibfixer.cli import (
     curate_bibliography,
@@ -32,7 +31,8 @@ def setup_simple_project(tmp_path, create_main: bool = True):
     return tex
 
 
-def test_remove_unused_entries(tmp_path, disable_formatting):
+@pytest.mark.usefixtures("disable_formatting")
+def test_remove_unused_entries(tmp_path):
     tex = setup_simple_project(tmp_path)
     bib = tmp_path / "refs.bib"
     bib.write_text("""@article{A,
@@ -52,7 +52,8 @@ def test_remove_unused_entries(tmp_path, disable_formatting):
     assert "Used" in content
 
 
-def test_remove_unused_entries_handles_citation_key_case(tmp_path, disable_formatting):
+@pytest.mark.usefixtures("disable_formatting")
+def test_remove_unused_entries_handles_citation_key_case(tmp_path):
     tex = setup_simple_project(tmp_path)
     bib = tmp_path / "refs.bib"
     bib.write_text("""@article{Peter2016,
@@ -71,7 +72,8 @@ def test_remove_unused_entries_handles_citation_key_case(tmp_path, disable_forma
     assert "Other2017" not in content
 
 
-def test_standardize_keys(tmp_path, disable_formatting):
+@pytest.mark.usefixtures("disable_formatting")
+def test_standardize_keys(tmp_path):
     tex = setup_simple_project(tmp_path)
     bib = tmp_path / "refs.bib"
     bib.write_text("""@article{oldkey,
@@ -100,7 +102,8 @@ def test_standardize_keys(tmp_path, disable_formatting):
     assert re.search(r"cite\{" + re.escape(newkey) + r"\}", tex.read_text())
 
 
-def test_acs_abbreviation_varied_cases(tmp_path, disable_formatting):
+@pytest.mark.usefixtures("disable_formatting")
+def test_acs_abbreviation_varied_cases(tmp_path):
     # ensure small differences in capitalization are handled by lookup
     tex = setup_simple_project(tmp_path)
     bib = tmp_path / "refs.bib"
@@ -114,7 +117,8 @@ def test_acs_abbreviation_varied_cases(tmp_path, disable_formatting):
         assert re.search(r"journal\s*=\s*\{J\. ?Am\. ?Chem\. ?Soc\.?\}", bib.read_text())
 
 
-def test_standardize_skipped_without_main(tmp_path, disable_formatting):
+@pytest.mark.usefixtures("disable_formatting")
+def test_standardize_skipped_without_main(tmp_path):
     # no main.tex created by setup
     bib = tmp_path / "refs.bib"
     bib.write_text("""@article{oldkey,
@@ -286,7 +290,8 @@ def test_metadata_skip_malformed_file(tmp_path, capsys):
     assert bib.read_text().startswith("@article")
 
 
-def test_abbreviate_journal_names_heuristic(tmp_path, disable_formatting, monkeypatch):
+@pytest.mark.usefixtures("disable_formatting")
+def test_abbreviate_journal_names_heuristic(tmp_path, monkeypatch):
     tex = setup_simple_project(tmp_path)
     bib = tmp_path / "refs.bib"
     # choose a journal not present in the tiny built-in mapping
@@ -600,7 +605,7 @@ def test_doi_to_bibtex_fetches_crossref_response(monkeypatch):
         def __enter__(self):
             return self
 
-        def __exit__(self, exc_type, exc, tb):
+        def __exit__(self, _exc_type, _exc, _tb):
             return False
 
     seen = {}
@@ -760,7 +765,8 @@ def test_update_entries_reports_cosmetic_mismatch_as_notice(tmp_path, monkeypatc
     assert "meaningful mismatch" not in logs
 
 
-def test_backup_and_duplicate_consolidation(tmp_path, disable_formatting):
+@pytest.mark.usefixtures("disable_formatting")
+def test_backup_and_duplicate_consolidation(tmp_path):
     tex = setup_simple_project(tmp_path)
     bib = tmp_path / "local.bib"
     bib.write_text("""@article{AlphaKey,
@@ -802,7 +808,8 @@ def test_backup_and_duplicate_consolidation(tmp_path, disable_formatting):
     assert len(cite_keys) == len(set(cite_keys))
 
 
-def test_duplicate_title_consolidation(tmp_path, disable_formatting):
+@pytest.mark.usefixtures("disable_formatting")
+def test_duplicate_title_consolidation(tmp_path):
     tex = setup_simple_project(tmp_path)
     bib1 = tmp_path / "one.bib"
     bib2 = tmp_path / "two.bib"

@@ -1,6 +1,5 @@
 
-from bibfixer import cli
-from bibfixer import curate
+from bibfixer import cli, curate
 from bibfixer.core import BibFile
 
 
@@ -80,7 +79,7 @@ def test_fix_unescaped_percent_without_global_bibfile(tmp_path, monkeypatch):
   title={50% valid},
 }
 """)
-    import bibfixer.fixes as fixes
+    from bibfixer import fixes
     # remove the global reference if it exists
     monkeypatch.delattr(fixes, "BibFile", raising=False)
 
@@ -113,7 +112,7 @@ def test_fix_html_entities(tmp_path):
     assert isinstance(fixed, int) and fixed > 0
     content = bib.read_text()
     # ensure html entities converted
-    assert "\&" in content and "<" in content and '"' in content
+    assert r"\&" in content and "<" in content and '"' in content
 
 
 def test_fix_problematic_unicode(tmp_path):
@@ -184,7 +183,7 @@ def test_remove_accents_and_malformed_author(tmp_path):
     bib = tmp_path / 'auth.bib'
     # author with accented characters and malformed patterns
     bib.write_text("""@article{X,
-  author={Fran\c{c}ois and M\"uller and Anná},
+  author={Fran\\c{c}ois and M\"uller and Anná},
 }
 """
     )
@@ -257,7 +256,7 @@ def test_consolidate_duplicate_titles(tmp_path):
     mapping = cli.consolidate_duplicate_titles([b1, b2])
     # mapping should map old keys to new (one of them)
     assert len(mapping) == 1
-    newkey = list(mapping.values())[0]
+    newkey = next(iter(mapping.values()))
     combined = b1.read_text() + b2.read_text()
     assert newkey in combined
     # original keys should not both be present

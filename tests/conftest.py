@@ -8,8 +8,8 @@ available here if desired.
 
 from __future__ import annotations
 
-import sys
 import pathlib
+import sys
 
 # add workspace root to path for test imports
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))

@@ -2,8 +2,7 @@
 
 import re
 
-from bibfixer import cli
-from bibfixer import helpers
+from bibfixer import cli, core, helpers
 from bibfixer.fixes import (
     fix_latex_unsafe_characters,
     fix_legacy_month_fields_text,
@@ -11,7 +10,6 @@ from bibfixer.fixes import (
     fix_problematic_unicode,
     preprocess_bib_for_parsing,
 )
-from bibfixer import core
 
 
 def test_fix_legacy_month_fields_text_unquoted(tmp_path):

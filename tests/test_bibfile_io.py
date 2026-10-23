@@ -1,5 +1,5 @@
-import sys
 import pathlib
+import sys
 
 # ensure workspace root is on path so that the bibfixer package can be imported
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))

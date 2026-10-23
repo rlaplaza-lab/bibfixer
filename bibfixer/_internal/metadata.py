@@ -2,18 +2,18 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
+import re
 import tempfile
 import time
-import re
 from pathlib import Path
 from typing import Any
 from urllib import error as urlerror
 from urllib import parse as urlparse
 from urllib import request as urlrequest
 
-from .. import core
-from .. import utils
+from .. import core, utils
 from ..fixes import abbreviate_journal_names as _abbreviate_journal_names
 from ..validation import get_fields_to_enrich, is_missing_field
 
@@ -34,13 +34,11 @@ def _parse_single_entry_bibtex(raw_bibtex: str) -> dict[str, Any] | None:
         tmp_path = Path(tmp.name)
     try:
         db = core.parse_bibtex_file(tmp_path)
-    except Exception:
+    except RuntimeError:
         return None
     finally:
-        try:
+        with contextlib.suppress(OSError):
             tmp_path.unlink()
-        except Exception:
-            pass
     if not db or not db.entries:
         return None
     return db.entries[0]

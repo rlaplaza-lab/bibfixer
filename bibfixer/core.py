@@ -7,9 +7,10 @@ entries, and a few constants used across the project.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Iterator
+from typing import Any, Callable
 
 # bibtexparser (1.x) relies on pyparsing, which has undergone an API change in
 # version 3.0; names such as ``DelimitedList`` and ``add_parse_action`` were
@@ -18,24 +19,24 @@ from typing import Any, Callable, Iterator
 # versions of pyparsing without modification.  This avoids forcing users to
 # downgrade pyparsing and conflict with other packages in their environment.
 try:
-    import pyparsing as _pp  # type: ignore[import]
+    import pyparsing as _pp
     if not hasattr(_pp, "DelimitedList") and hasattr(_pp, "delimitedList"):
         # mypy doesn't know about the dynamic attribute; it's safe at runtime
-        _pp.DelimitedList = _pp.delimitedList  # type: ignore[attr-defined,misc]
+        _pp.DelimitedList = _pp.delimitedList  # type: ignore[misc]
 
     # ``add_parse_action`` was renamed to ``addParseAction``; ensure both exist
     for _cls in (_pp.ParserElement, getattr(_pp, "Word", None), getattr(_pp, "Regex", None), getattr(_pp, "WordRegex", None)):
         if _cls is not None and hasattr(_cls, "addParseAction") and not hasattr(_cls, "add_parse_action"):
             # the stub for ParserElement doesn't define these attributes, so
             # ignore type checking here as well
-            _cls.add_parse_action = _cls.addParseAction  # type: ignore[attr-defined,assignment]
+            _cls.add_parse_action = _cls.addParseAction  # type: ignore[method-assign]
 except ImportError:
     pass
 
-import bibtexparser  # type: ignore[import]
-from bibtexparser.bparser import BibTexParser  # type: ignore[import]
-from bibtexparser.bwriter import BibTexWriter  # type: ignore[import]
-from bibtexparser.latexenc import latex_to_unicode  # type: ignore[import]
+import bibtexparser
+from bibtexparser.bparser import BibTexParser
+from bibtexparser.bwriter import BibTexWriter
+from bibtexparser.latexenc import latex_to_unicode
 
 # constant list that was previously defined in the monolithic script
 FIELDS_TO_REMOVE = [
@@ -101,8 +102,9 @@ class BibFile:
         try:
             with self.path.open("r", encoding="utf-8") as f:
                 self.database = bibtexparser.load(f, parser=parser)
+        # bibtexparser and pyparsing raise mixed errors; wrap them for callers.
         except Exception as exc:
-            raise RuntimeError(f"Error parsing {self.path}: {exc}")
+            raise RuntimeError(f"Error parsing {self.path}: {exc}") from exc
 
     def write(self) -> None:
         if self.database is None:
@@ -124,8 +126,9 @@ class BibFile:
         try:
             with self.path.open("w", encoding="utf-8") as f:
                 bibtexparser.dump(self.database, f, writer=writer)
+        # bibtexparser raises mixed write errors; wrap them for callers.
         except Exception as exc:
-            raise RuntimeError(f"Error writing {self.path}: {exc}")
+            raise RuntimeError(f"Error writing {self.path}: {exc}") from exc
 
     @property
     def entries(self) -> list[dict[str, Any]]:

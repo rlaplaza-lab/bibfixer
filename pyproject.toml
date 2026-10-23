@@ -36,12 +36,15 @@ dependencies = [
 
 [project.optional-dependencies]
 pybtex = ["pybtex>=0.24"]
+# MCP server for agents. The SDK requires Python 3.10+.
+mcp = ["mcp>=2.3"]
 
 # development/test tools
-test = ["pytest", "ruff", "mypy"]
+test = ["pytest", "ruff>=0.16", "mypy>=1.13", "vulture>=2.14"]
 
 [project.scripts]
 bibfixer = "bibfixer.cli:main"
+bibfixer-mcp = "bibfixer.mcp:main"
 
 [tool.setuptools]
 # include our CSV mapping files in the installed package
@@ -60,3 +63,32 @@ exclude = []
 
 [tool.setuptools.package-data]
 "bibfixer" = ["data/*.csv"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+norecursedirs = ["build", "dist"]
+
+[tool.ruff]
+target-version = "py39"
+src = ["bibfixer", "tests"]
+
+[tool.mypy]
+python_version = "3.10"
+check_untyped_defs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = [
+    "bibtexparser",
+    "bibtexparser.*",
+    "iso4",
+    "iso4.*",
+    "pybtex",
+    "pybtex.*",
+    "mcp",
+    "mcp.*",
+]
+ignore_missing_imports = true

@@ -15,13 +15,8 @@ def format_bibliography(
     bib_file: Path,
     *,
     drop_fields: list[str],
-    indent: int = 2,
-    align: int = 14,
-    dangling: str = "braces",
 ) -> None:
     """Format *bib_file* in place and remove selected fields."""
-    _ = (indent, align, dangling)
-
     bib_database = core.parse_bibtex_file(bib_file)
     if not bib_database:
         return

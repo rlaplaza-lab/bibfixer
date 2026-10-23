@@ -2,15 +2,17 @@ import subprocess
 import sys
 from pathlib import Path
 
-from bibfixer import cli
-from bibfixer import pipeline
+from bibfixer import cli, pipeline
 
 
 def test_cli_help():
     # call the CLI script to make sure it runs without error
-    result = subprocess.run([sys.executable, "-m", "bibfixer.cli", "--help"],
-                            capture_output=True,
-                            text=True)
+    result = subprocess.run(
+        [sys.executable, "-m", "bibfixer.cli", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     assert result.returncode == 0
     # the help text should reference BibTeX functionality
     assert "unified bibtex" in result.stdout.lower()

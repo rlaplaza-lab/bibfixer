@@ -1,11 +1,11 @@
 from bibfixer.utils import (
-    normalize_unicode,
+    extract_entry_doi,
     normalize_doi,
-    normalize_url,
     normalize_keywords,
     normalize_title,
+    normalize_unicode,
+    normalize_url,
     transliterate_for_key,
-    extract_entry_doi,
 )
 
 

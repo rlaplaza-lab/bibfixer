@@ -9,12 +9,18 @@ from __future__ import annotations
 
 import re
 from collections import defaultdict
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable, List
+from typing import Any, TypedDict
 
-from . import core, utils, helpers
+from . import core, helpers, utils
 from .core import BibFile
 from .runlog import RunLogger
+
+try:
+    from pybtex.database.input import bibtex as _pybtex_bibtex
+except ImportError:
+    _pybtex_bibtex = None
 
 _REQUIRED_FIELDS_BY_ENTRYTYPE: dict[str, tuple[tuple[str, ...], ...]] = {
     "article": (("author",), ("title",), ("journal",), ("year",)),
@@ -45,6 +51,15 @@ _CITATION_SUPPLEMENTARY_FIELDS_BY_ENTRYTYPE: dict[str, tuple[str, ...]] = {
 _EMPTY_FIELD_PLACEHOLDERS = frozenset({"{}", "{-}", "{--}"})
 
 
+class _BibFileStats(TypedDict):
+    file: str
+    entry_count: int
+    entries_with_doi: int
+    entries_with_title: int
+    entries_with_author: int
+    entries_with_year: int
+
+
 def is_missing_field(value: Any) -> bool:
     """Return whether a BibTeX field value should be treated as absent."""
     if value is None:
@@ -53,9 +68,7 @@ def is_missing_field(value: Any) -> bool:
         stripped = value.strip()
         if not stripped:
             return True
-        if stripped in _EMPTY_FIELD_PLACEHOLDERS:
-            return True
-        return False
+        return stripped in _EMPTY_FIELD_PLACEHOLDERS
     return False
 
 
@@ -117,7 +130,7 @@ def check_required_fields_by_entry_type() -> list[str]:
     return issues
 
 
-def validate_citations(logger: RunLogger | None = None) -> List[str]:
+def validate_citations(logger: RunLogger | None = None) -> list[str]:
     r"""Ensure that every \cite command has a corresponding bib entry.
 
     Returns a list of issue descriptions (empty if everything checks out).
@@ -125,7 +138,7 @@ def validate_citations(logger: RunLogger | None = None) -> List[str]:
     tex_files = helpers.collect_all_tex_files()
     bib_files = helpers.collect_all_bib_files()
 
-    all_issues: List[str] = []
+    all_issues: list[str] = []
     total_citations = 0
     total_valid = 0
 
@@ -148,9 +161,9 @@ def validate_citations(logger: RunLogger | None = None) -> List[str]:
                     if norm_cr:
                         crossrefs[k] = norm_cr
         try:
-            content = bib.read_text(encoding='utf-8')
-        except Exception:
-            content = ''
+            content = bib.read_text(encoding="utf-8")
+        except OSError:
+            content = ""
         for match in re.finditer(r'@comment\s*\{@\w+\{([^,}]+)', content):
             normalized = utils.normalize_citation_key(match.group(1).strip())
             if normalized:
@@ -224,7 +237,7 @@ def validate_citations(logger: RunLogger | None = None) -> List[str]:
     return all_issues
 
 
-def validate_bib_file(bib_file: Path):
+def validate_bib_file(bib_file: Path) -> _BibFileStats | None:
     """Return simple statistics for a single bib file or ``None`` on failure."""
     db = core.parse_bibtex_file(bib_file)
     if not db:
@@ -243,18 +256,18 @@ def validate_bib_file(bib_file: Path):
             entries_with_author += 1
         if entry.get('year'):
             entries_with_year += 1
-    stats = {
-        'file': str(bib_file),
-        'entry_count': len(db.entries),
-        'entries_with_doi': entries_with_doi,
-        'entries_with_title': entries_with_title,
-        'entries_with_author': entries_with_author,
-        'entries_with_year': entries_with_year,
+    stats: _BibFileStats = {
+        "file": str(bib_file),
+        "entry_count": len(db.entries),
+        "entries_with_doi": entries_with_doi,
+        "entries_with_title": entries_with_title,
+        "entries_with_author": entries_with_author,
+        "entries_with_year": entries_with_year,
     }
     return stats
 
 
-def generate_report(bib_files: Iterable[Path], before_stats=None) -> None:
+def generate_report(bib_files: Iterable[Path]) -> None:
     """Print a simple report of DOI/title coverage for each file."""
     for bib in bib_files:
         stats = validate_bib_file(bib)
@@ -312,7 +325,7 @@ def check_duplicate_dois() -> int:
                     core.EntryMeta(key=k or '', file=bf.path, entry=entry)
                 )
     count = 0
-    for doi, metas in doi_map.items():
+    for metas in doi_map.values():
         if len({m.key for m in metas}) > 1:
             count += 1
     return count
@@ -324,8 +337,10 @@ def check_unescaped_percent() -> int:
     issues = 0
     for bib in bibs:
         try:
-            text = bib.read_text(encoding='utf-8')
-        except Exception:
+            text = bib.read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        if not text:
             continue
         for line in text.splitlines():
             stripped = line.strip()
@@ -361,7 +376,7 @@ def check_file_correspondence() -> bool:
     return ok
 
 
-def generate_summary():
+def generate_summary() -> None:
     """Print a very small summary used by the CLI workflow."""
     tex_files = helpers.collect_all_tex_files()
     bib_files = helpers.collect_all_bib_files()
@@ -440,15 +455,21 @@ def check_bibtex_syntax() -> bool:
     for bib in bibs:
         try:
             core.parse_bib_file(bib)
-        except Exception:
+        except RuntimeError:
+            errors = True
+            parsed = False
+        else:
+            parsed = True
+        if not parsed:
+            continue
+        if _pybtex_bibtex is None:
             errors = True
             continue
         try:
-            from pybtex.database.input import bibtex  # type: ignore
-            parser = bibtex.Parser()
-            with open(bib, 'r', encoding='utf-8') as f:
-                parser.parse_stream(f)
-        except Exception:
+            parser = _pybtex_bibtex.Parser()
+            with bib.open(encoding="utf-8") as handle:
+                parser.parse_stream(handle)
+        except Exception:  # noqa: BLE001 — pybtex raises mixed parse errors
             errors = True
     return not errors
 
